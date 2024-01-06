@@ -7,12 +7,17 @@ import sys
 
 import git
 
-from common.hw_base import HW, directory
+from common.hw_base import BaseHWSetup, HW, directory
 import common.utils as u
 import common.printing as pr
 import common.submissions as subs
 
 ALIASES = { "ASSIGNMENT" }
+
+
+class SETUP(BaseHWSetup):
+    """Setup logic for demo assignment"""
+
 
 class GRADER(HW):
     """Grading rubic and tests for ASSIGNMENT assignment
@@ -55,4 +60,3 @@ class GRADER(HW):
 
     def cleanup(self):
         """Post ASSIGNMENT cleanup"""
-

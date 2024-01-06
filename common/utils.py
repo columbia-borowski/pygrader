@@ -1,10 +1,15 @@
-"""utils.py: Grading helper functions"""
+"""common/utils.py: Grading helper functions"""
+
+from __future__ import annotations
+
 import os
+import re
+import shlex
 import shutil
 import subprocess
-from typing import Callable, Dict, List, Optional
+import sys
 
-import common.printing as p
+from common import printing as p
 
 KEDR_START = "sudo kedr start {}"
 INSMOD = "sudo insmod {}"
@@ -12,7 +17,7 @@ RMMOD = "sudo rmmod {}"
 KEDR_STOP = "sudo kedr stop {}"
 DMESG = "sudo dmesg"
 DMESG_C = "sudo dmesg -C"
-MAKE = "make clean ; make {}"
+MAKE = "make clean > /dev/null 2>&1 ; make {}"
 
 # This template will extract all text in [start, end]
 SED_BETWEEN = "sed -n '/{0}/,/{1}/p' {2}"
@@ -21,19 +26,25 @@ SED_BETWEEN = "sed -n '/{0}/,/{1}/p' {2}"
 SED_TO_END = "sed -n '/{0}/,$p' {1}"
 
 
-def cmd_popen(cmd: str) -> "Process":
+def cmd_popen(cmd: str):
     """Uses subprocess.Popen to run a command, returns the object."""
-    prc = subprocess.Popen(
+    return subprocess.Popen(
         cmd,
         shell=True,
-        stdin=subprocess.PIPE,  # pylint: disable=R1732
+        stdin=subprocess.PIPE,
         executable="/bin/bash",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         close_fds=True,
         universal_newlines=True,
     )
-    return prc
+
+
+def cmd_communicate(process, exclude: [str]) -> (str, str):
+    out, err = process.communicate()
+    out = "".join(ch for ch in out if ch not in set(exclude))
+    err = "".join(ch for ch in err if ch not in set(exclude))
+    return out, err
 
 
 def run_cmd(cmd: str, silent: bool = False, shell: bool = True, **kwargs) -> int:
@@ -44,7 +55,19 @@ def run_cmd(cmd: str, silent: bool = False, shell: bool = True, **kwargs) -> int
 def is_dir(path: str):
     """Checks if path is a directory"""
     if not os.path.isdir(path):
-        raise ValueError("{} is not a directory".format(path))
+        raise ValueError(f"{path} is not a directory")
+
+
+def create_dir(name):
+    """Wrapper around mkdir"""
+    if not os.path.isdir(name):
+        access = 0o700
+        try:
+            os.mkdir(name, access)
+        except OSError:
+            sys.exit(f"Creation of the directory {name} failed")
+        else:
+            print(f"Successfully created the directory {name}")
 
 
 def file_exists(fname: str) -> bool:
@@ -57,12 +80,27 @@ def dir_exists(dir_path: str) -> bool:
     return os.path.isdir(dir_path)
 
 
-def prompt_file_name(file_list: Optional[List[str]] = None) -> str:
+def prompt_overwrite(dir_name: str, dir_path: str) -> bool:
+    while True:
+        try:
+            res = input(f"{dir_name} is already set up. Overwrite? [y/n]: ")
+        except EOFError:
+            print("^D")
+        if res == "n":
+            return False
+        if res == "y":
+            break
+
+    shutil.rmtree(dir_path)
+    return True
+
+
+def prompt_file_name(file_list: list[str] | None = None) -> str:
     """Prompts the user for a file to open"""
     ls_output = os.listdir() if not file_list else file_list
 
     for i, file in enumerate(ls_output):
-        p.print_yellow("({}) {}".format(i + 1, file))
+        p.print_yellow(f"({i + 1}) {file}")
 
     while True:
         try:
@@ -80,7 +118,7 @@ def get_file(fname: str) -> str:
         return fname
 
     p.print_red("_" * 85)
-    p.print_red(f"Couldn't find {fname}! " f"Did the student name it something else?")
+    p.print_red(f"Couldn't find {fname}! Did the student name it something else?")
     try:
         submission_name = prompt_file_name()
     except EOFError as e:
@@ -90,16 +128,17 @@ def get_file(fname: str) -> str:
     return submission_name
 
 
-def concat_files(outfile: str, file_types: List[str]) -> str:
+def concat_files(outfile: str, file_types: list[str]) -> str:
     """Concats all relevant files in the cwd into 1 file called `outfile`."""
     if file_exists(outfile):
         return outfile
     file_header = "=" * 80 + "\n{}\n" + "=" * 80 + "\n"
-    with open(outfile, "w+") as o:
+    with open(outfile, "w+", encoding="utf-8") as o:
         for fname in os.listdir():
             if fname != outfile and fname[-2:] in file_types:
                 o.write(file_header.format(fname))
-                shutil.copyfileobj(open(fname, "r"), o)
+                with open(fname, "r", encoding="utf-8") as src:
+                    shutil.copyfileobj(src, o)
     return outfile
 
 
@@ -111,7 +150,7 @@ def remove_file(fname: str):
 
 
 def extract_between(
-    fname: str, start: str, end: Optional[str] = None, capture: bool = False
+    fname: str, start: str, end: str | None = None, capture: bool = False
 ):
     """Prints the text in fname that's in between start and end"""
     if not end:
@@ -123,14 +162,15 @@ def extract_between(
     )
 
 
-def extract_function(file_name: str, funct_name: str) -> str:
+def extract_function(file_name: str, funct_name: str, index: int = 0) -> str:
     if not file_exists(file_name):
         return ""
     stack = []
     started = False
     funct = ""
     block_comment_count = 0
-    with open(file_name, "r") as f:
+    count = 0
+    with open(file_name, "r", encoding="utf-8") as f:
         lines = f.readlines()
         for line in lines:
             if "/*" in line:
@@ -144,7 +184,9 @@ def extract_function(file_name: str, funct_name: str) -> str:
             is_prototype = "{" not in line and ";" in line
             is_line_comment = "//" in line
             if funct_name in line and not is_prototype and not is_line_comment:
-                started = True
+                if count == index:
+                    started = True
+                count += 1
 
             funct += line
             if "{" in line:
@@ -173,15 +215,12 @@ def grep_string(words: str, pattern: str, padding: int = 0) -> int:
 
     NOTE: Grep output is dumped to the shell."""
     padding_opt = "" if not padding else f"-C {padding}"
-    cmd = f"echo '{words}' | grep --color=always {padding_opt} -E '^|{pattern}'"
+    cmd = f"echo {shlex.quote(words)} | grep --color=always {padding_opt} -E '^|{pattern}'"
     return subprocess.run(cmd, shell=True).returncode
 
 
 def inspect_string(
-    s: str,
-    pattern: Optional[str] = None,
-    use_pager: bool = True,
-    lang: Optional[str] = None,
+    s: str, pattern: str | None = None, use_pager: bool = True, lang: str | None = None
 ):
     if not lang:
         lang = "txt"
@@ -200,7 +239,26 @@ def inspect_string(
     print(bat.communicate(input=s)[0])
 
 
-def inspect_file(fname: str, pattern: Optional[str] = None, use_pager: bool = True):
+def grep_includes(fname: str, pattern: str) -> {}:
+    # file_check = get_file(fname)
+    # https://linuxhint.com/run-grep-python/
+    found_set = set()
+    with open(fname, "r", encoding="utf-8") as file_open:
+        for line in file_open:
+            line = line[0 : len(line) - 1 :]
+            if re.search(pattern, line):
+                # https://www.geeksforgeeks.org/pattern-matching-python-reg ex/
+                guard = re.search("(?<=#include\s<).*(?=>)", line)
+                if not guard:
+                    guard = re.search('(?<=#include\s").*(?=")', line)
+
+                if guard:
+                    guard = guard.group()
+                    found_set.add(guard)
+    return found_set
+
+
+def inspect_file(fname: str, pattern: str | None = None, use_pager: bool = True):
     """Displays 'fname', w/ optional pattern highlighted, optionally in less"""
     name = get_file(fname)
     bat_str = f"bat --color=always {name}"
@@ -216,14 +274,12 @@ def inspect_file(fname: str, pattern: Optional[str] = None, use_pager: bool = Tr
 
 
 def inspect_directory(
-    files: List[str],
-    pattern: Optional[str] = None,
-    banner_fn: Optional[Callable] = None,
+    files: list[str], pattern: str | None = None, banner_fn: callable = None
 ):
     """Prompt the user for which file to inspect with optional pattern.
 
     Args:
-        files: List of files in the current directory
+        files: list of files in the current directory
             (as reported by os.listdir(os.getcwd())).
         pattern: Optional pattern to highlight in the files.
         banner_fn: Optional function to call before presenting choices
@@ -233,7 +289,7 @@ def inspect_directory(
         if banner_fn:
             banner_fn()
         for i, file in enumerate(files):
-            p.print_yellow("({}) {}".format(i + 1, file))
+            p.print_yellow(f"({i + 1}) {file}")
         p.print_yellow(f"({len(files) + 1}) " f"{p.CVIOLET2}exit{p.CEND}")
         try:
             choice = int(input(f"{p.CBLUE2}Choice: {p.CEND}"))
@@ -248,20 +304,21 @@ def inspect_directory(
             continue
 
 
-def compile_code(makefile_target: str = ""):
+def compile_code(makefile_target: str = "", silent: bool = False):
     """Compiles the current directory (either with Make or manually)"""
     ls_output = os.listdir()
-    if "Makefile" not in ls_output:
+    if "Makefile" not in ls_output and "makefile" not in ls_output:
         # Let's let the grader figure it out
         os.system("bash")
+    if not silent:
+        p.print_cyan("[ Compiling... ]")
+    silent_str = " > /dev/null 2>&1" if silent else ""
+    ret = subprocess.call(MAKE.format(makefile_target) + silent_str, shell=True)
 
-    p.print_cyan("[ Compiling... ]")
-    ret = subprocess.call(MAKE.format(makefile_target), shell=True)
-
-    if ret != 0:
-        p.print_red("[ OOPS ]")
-    else:
-        p.print_green("[ OK ]")
+    # if ret != 0:
+    #     p.print_red("[ OOPS ]")
+    # else:
+    #     p.print_green("[ OK ]")
 
     return ret
 
@@ -346,10 +403,12 @@ def compare_values(
     return False
 
 
-def run_and_prompt(f: Callable):
+def run_and_prompt(f: callable):
     """Runs f and then prompts for rerun/shell/continue."""
     while True:
-        f()
+        out = f()
+        if out is True or isinstance(out, list):
+            break
         p.print_line()
         p.print_yellow("Run test again (a)")
         p.print_yellow("Open shell & run again (s)")
@@ -365,18 +424,17 @@ def run_and_prompt(f: Callable):
 
         if usr_input == "a":
             continue
-        elif usr_input == "s":
+        if usr_input == "s":
             p.print_red("^D/exit to end shell session")
             os.system("bash")
             continue
-        else:
-            break
+        break
 
 
 def run_and_prompt_multi(
-    test_name_to_callable: Dict[str, Callable],
-    banner_fn: Optional[Callable] = None,
-    finish_msg: Optional[str] = None,
+    test_name_to_callable: dict[str, callable],
+    banner_fn: callable = None,
+    finish_msg: str | None = None,
 ):
     """Wraps run_and_prompt by offering multiple tests to run.
 
@@ -393,7 +451,7 @@ def run_and_prompt_multi(
         if banner_fn:
             banner_fn()
         for i, test_name in enumerate(test_name_to_callable.keys()):
-            p.print_yellow("({}) {}".format(i + 1, test_name))
+            p.print_yellow(f"({i + 1}) {test_name}")
         p.print_yellow(
             f"({len(number_to_callable) + 1}) " f"{p.CVIOLET2}{finish_msg}{p.CEND}"
         )
@@ -417,3 +475,13 @@ def run_and_prompt_multi(
 
 def prompt_continue(ptext: str = "[ Press enter to continue... ]"):
     input(f"{p.CCYAN}{ptext}{p.CEND}")
+
+
+def tabs_to_spaces(text: str) -> str:
+    """Converts tabs to spaces"""
+    return text.expandtabs(4)
+
+
+def exit_with_not_supported_msg():
+    p.print_red("[ Not Supported ]")
+    sys.exit(1)

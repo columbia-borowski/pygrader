@@ -9,8 +9,9 @@ import signal
 import sys
 from typing import Dict, List, Optional, Tuple
 
-import common.printing as p
-import common.utils as utils
+from common import printing as p
+from common import utils as utils
+from common.assignments import get_assignment_grader
 from common.grades import Grades
 from common.rubric import RubricItem
 
@@ -160,7 +161,7 @@ class Grader:
         self.rubric_code = rubric_code
         self.submitter = submitter
         self.env = env
-        self.hw_class = self._get_hw_class()
+        self.hw_class = get_assignment_grader(self.hw_name, self.submitter)
         self.hw_class.grader = self
 
         signal.signal(signal.SIGINT, self.hw_class.exit_handler)
@@ -172,12 +173,6 @@ class Grader:
             self.submitter,
             self.hw_class.grading_policy,
         )
-
-    def _get_hw_class(self):
-        for assignment in assignments:
-            if self.hw_name.lower() in assignment.ALIASES:
-                return assignment.GRADER(self.submitter)
-        sys.exit(f"Unsupported assignment: {self.hw_name}")
 
     def print_headerline(self, rubric_item: RubricItem):
         header = "Grading {}".format(rubric_item.code)

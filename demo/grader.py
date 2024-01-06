@@ -10,9 +10,13 @@ import git
 import common.printing as pr
 import common.submissions as subs
 import common.utils as u
-from common.hw_base import HW, directory
+from common.hw_base import BaseHWSetup, HW, directory
 
 ALIASES = {"tutorial", "demo", "meme"}
+
+
+class SETUP(BaseHWSetup):
+    """Setup logic for demo assignment"""
 
 
 class GRADER(HW):
