@@ -1,26 +1,23 @@
-"""
-grades.py: Logic for storing points/comments while grading
-"""
+"""common/grades.py: Logic for storing points/comments while grading"""
+
+from __future__ import annotations
+
 import json
 import os
+import statistics
 import sys
-from typing import Dict, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, TypeAlias
 
-import common.utils as utils
+from common import printing as p
+from common import utils
+from common.grading_policies import GradingPolicy
+from common.rubric import Rubric
 
-DEFAULT_LATE_PENALTY = 0.2
+if TYPE_CHECKING:
+    from common.hw_base import HW
 
 # Probably better to just look at a grades.json
-GradesDictType = Dict[
-    str,  # Submitter
-    Dict[
-        str,
-        Union[
-            bool,  # is_late
-            Dict[str, Dict[str, Union[bool, str]]],  # subitem_code  # award/comments
-        ],
-    ],
-]
+GradesDictType: TypeAlias = dict[str, dict[str, list[dict[str, dict[str, bool | str]]]]]
 
 
 class Grades:
@@ -31,42 +28,34 @@ class Grades:
         rubric: the rubric object for a given hw
         submitter: The uni/team we're currently grading
         _grades: Maps submitter -> (is_late, (item -> (pts, comments)))
+        grading_policy: Class which control grading adjustments for submissions
     """
 
-    def __init__(self, grades_file, rubric, name):
+    def __init__(
+        self,
+        grades_file: str,
+        rubric: Rubric,
+        name: str,
+        grading_policy: GradingPolicy,
+    ):
         self.grades_file = os.path.abspath(grades_file)
         self.rubric = rubric
         self.submitter = name
-        self._grades = self.load_grades()
+        self._grades = self._load_grades()
+        self.grading_policy = grading_policy
 
         if self.submitter and self.submitter not in self._grades:
             # This is the first time grading the submission
-            self.add_submission_entry()
+            self._add_submission_entry()
         self.synchronize()
 
-    def _get_defined_rubric_subitems(self) -> Set[str]:
-        subitems = set()
-        for table_code in sorted(self.rubric.keys()):
-            if table_code == "late_penalty":
-                continue
-            for item_code in sorted(self.rubric[table_code].keys()):
-                item = self.rubric[table_code][item_code]
-                for subitem_code in range(1, len(item.subitems) + 1):
-                    code = f"{item_code}.{subitem_code}"
-                    if code in subitems:
-                        sys.exit(f"Rubric subitem '{code}' defined twice!")
-
-                    subitems.add(code)
-
-        return subitems
-
-    def load_grades(self) -> GradesDictType:
+    def _load_grades(self) -> GradesDictType:
         """Returns a dictionary representation of the TA's grades thus far"""
         if not utils.file_exists(self.grades_file):
             # The TA hasn't started grading this hw yet
-            return dict()
+            return {}
 
-        with open(self.grades_file, "r") as f:
+        with open(self.grades_file, "r", encoding="utf-8") as f:
             grades = json.load(f)
 
         # Let's traverse over the rubric and make sure to adjust the dict if
@@ -86,14 +75,25 @@ class Grades:
 
         return grades
 
-    def add_submission_entry(self):
-        """Create a new entry for student/team with null fields"""
-        self._grades[self.submitter] = dict()
-        self._grades[self.submitter]["is_late"] = False
-        rubric_scores = dict()
+    def _get_defined_rubric_subitems(self) -> set[str]:
+        subitems = set()
         for table_code in sorted(self.rubric.keys()):
-            if table_code == "late_penalty":
-                continue
+            for item_code in sorted(self.rubric[table_code].keys()):
+                item = self.rubric[table_code][item_code]
+                for subitem_code in range(1, len(item.subitems) + 1):
+                    code = f"{item_code}.{subitem_code}"
+                    if code in subitems:
+                        sys.exit(f"Rubric subitem '{code}' defined twice!")
+
+                    subitems.add(code)
+
+        return subitems
+
+    def _add_submission_entry(self):
+        """Create a new entry for student/team with null fields"""
+        self._grades[self.submitter] = {}
+        rubric_scores = {}
+        for table_code in sorted(self.rubric.keys()):
             for item_code in sorted(self.rubric[table_code].keys()):
                 item = self.rubric[table_code][item_code]
                 for subitem_code in range(1, len(item.subitems) + 1):
@@ -102,68 +102,67 @@ class Grades:
                     rubric_scores[code] = {"award": None, "comments": None}
         self._grades[self.submitter]["scores"] = rubric_scores
 
-    def __getitem__(self, rubric_subitem) -> Dict[str, Union[bool, str]]:
+    def __getitem__(self, rubric_subitem) -> dict[str, bool | str]:
         """Wrapper around self._grades for convenience"""
         return self._grades[self.submitter]["scores"][rubric_subitem]
 
     def synchronize(self):
         """Write out the grades dictionary to the filesystem"""
-        with open(self.grades_file, "w") as f:
+        with open(self.grades_file, "w", encoding="utf-8") as f:
             # Indent for pretty printing :^)
             json.dump(self._grades, f, indent=4, sort_keys=True)
             os.fsync(f.fileno())
 
-    def is_graded(self, code: str, name: Optional[str] = None) -> bool:
+    def is_graded(self, code: str, name: str | None = None) -> bool:
         """Checks if a subitem has been graded yet"""
         if not name:
             name = self.submitter
-        # TODO: yikes, 4 dictionary accesses xD. is there a better way?
+
         return self._grades[name]["scores"][code]["award"] is not None
 
-    def is_late(self, name: Optional[str] = None) -> bool:
-        """Getter for is_late"""
-        if not name:
-            name = self.submitter
-        return self._grades[name]["is_late"]
+    def enforce_grading_policy(self, hw_tester: HW):
+        self._grades[self.submitter][
+            "grading_policy"
+        ] = self.grading_policy.enforce_policy(hw_tester)
+        self.synchronize()
 
-    def set_late(self, opt: bool):
-        """Setter for is_late"""
-        self._grades[self.submitter]["is_late"] = opt
-
-    def dump_grades(self, submitter: str, rubric_code: str):
-        all_pts = 0
-        graded_submissions = 0
-
-        if submitter:
-            _, _, s = self.get_submission_grades(submitter, rubric_code)
+    def dump(self, rubric_code: str):
+        student_list = self._grades if not self.submitter else [self.submitter]
+        for name in student_list:
+            _, _, s = self._get_submission_grades(name, rubric_code)
             print(s)
-        else:
-            for name in sorted(self._grades, key=str.casefold):
-                isg, tpts, s = self.get_submission_grades(name, rubric_code)
-                print(s)
-                all_pts += tpts
-                if isg:
-                    graded_submissions += 1
 
-            avg = round(all_pts / graded_submissions, 2) if graded_submissions else 0
-            print(
-                f"\nAverage across {graded_submissions} " f"graded submission(s): {avg}"
-            )
+    def status(self, rubric_code: str) -> tuple[bool, int]:
+        student_list = self._grades if not self.submitter else [self.submitter]
+        all_graded = True
+        graded_count = 0
+        for name in student_list:
+            is_graded, _, _ = self._get_submission_grades(name, rubric_code)
+            if is_graded:
+                graded_count += 1
+            elif all_graded:
+                all_graded = False
 
-    def status(self, submitter: str, rubric_code: str) -> bool:
-        if submitter:
-            is_graded, _, _ = self.get_submission_grades(submitter, rubric_code)
-            return is_graded
-        else:
-            for name in sorted(self._grades, key=str.casefold):
-                is_graded, _, _ = self.get_submission_grades(name, rubric_code)
-                if not is_graded:
-                    return False
-            return True
+        return all_graded, graded_count
 
-    def get_submission_grades(
-        self, name: Optional[str] = None, rubric_code: Optional[str] = None
-    ) -> Tuple[bool, float, str]:
+    def print_stats(self):
+        if self.submitter:
+            return
+
+        grades_list = [
+            grade
+            for uni in self._grades
+            if (grade := self._get_submission_grades(uni, "ALL")[1]) > 0
+        ]
+        p.print_magenta("Computed using nonzero scores.")
+        print(f"Student count: {len(grades_list)}")
+        print(f"Average grade: {statistics.mean(grades_list):.2f}")
+        print(f"Median grade: {statistics.median(grades_list):.2f}")
+        print(f"Standard dev: {statistics.stdev(grades_list):.2f}")
+
+    def _get_submission_grades(
+        self, name: str | None = None, rubric_code: str | None = None
+    ) -> tuple[bool, float, str]:
         """Returns (uni, pts, comments) in tsv format
 
         Returns:
@@ -183,23 +182,18 @@ class Grades:
 
         total_pts = 0
         all_comments = []
-        at_least_one_graded = False
         submission_scores = self._grades[name]["scores"]
 
-        for rubric_key, rubric_item_mappings in self.rubric.items():
-            if rubric_key == "late_penalty":
-                continue
+        for _, rubric_item_mappings in self.rubric.items():
             for item_code, rubric_item in rubric_item_mappings.items():
                 if rubric_code != "ALL" and not item_code.startswith(rubric_code):
                     continue
+
                 if not all(
                     self.is_graded(f"{item_code}.{si}", name)
                     for si, _ in enumerate(rubric_item.subitems, 1)
                 ):
-                    st = f"{name}\tn/a\tn/a"
-                    return False, total_pts, st
-
-                at_least_one_graded = True
+                    return False, total_pts, f"{name}\tn/a\tn/a"
 
                 if rubric_item.deduct_from:
                     # If a deductive item, we increment total_pts upfront
@@ -217,7 +211,7 @@ class Grades:
                     item_comments = ""
 
                     if (
-                        (applied and pts <= 0) or (not applied and pts > 0)
+                        (applied and pts < 0) or (not applied and pts > 0)
                     ) or ta_comments:
                         # 1. You applied a deductive rubric item
                         # 2. They lost an additive rubric item
@@ -228,7 +222,11 @@ class Grades:
                         pretty_code_name = (
                             item_code if len(rubric_item.subitems) == 1 else code
                         )
-                        item_comments += f"({pretty_code_name})"
+                        pretty_pts = pts if pts > 0 else abs(pts)
+                        if (pts >= 0) == applied and ta_comments:
+                            item_comments += f"({pretty_code_name})"
+                        else:
+                            item_comments += f"({pretty_code_name}: -{pretty_pts})"
 
                     if ta_comments:
                         item_comments += f" {ta_comments}"
@@ -242,24 +240,15 @@ class Grades:
                     total_pts = max(floor_pts, ceiled)
 
         # We assume that if the TA wants ALL submission grades, that they'll
-        # also want to apply late penalities (they're about to finalize grades).
-        # Otherwise, we just just dump raw grades for reference.
-        if rubric_code == "ALL" and self.is_late(name):
-            all_comments.insert(0, "(LATE)")
-        concatted_comments = "; ".join(all_comments)
+        # also want to apply grading policies (they're about to finalize
+        # grades). Otherwise, we just just dump raw grades for reference.
+        if rubric_code == "ALL":
+            total_pts, all_comments = self.grading_policy.get_points_and_comments(
+                total_pts, all_comments, self._grades[name]["grading_policy"]
+            )
 
-        late_penalty = DEFAULT_LATE_PENALTY
-        if "late_penalty" in self.rubric:
-            late_penalty = self.rubric["late_penalty"]
-        if rubric_code == "ALL" and self.is_late(name):
-            total_pts = round(total_pts * (1 - late_penalty), 2)
+        concatted_comments = "; ".join(all_comments)
 
         total_pts = max(total_pts, 0)
 
-        st = ""
-        if at_least_one_graded:
-            st = f"{name}\t{total_pts}\t{concatted_comments}"
-        else:
-            st = f"{name}\tn/a\tn/a"
-
-        return at_least_one_graded, total_pts, st
+        return True, total_pts, f"{name}\t{total_pts}\t{concatted_comments}"

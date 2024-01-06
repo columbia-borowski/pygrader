@@ -8,6 +8,7 @@ from typing import Callable
 from common import printing as p
 from common import submissions as subs
 from common import utils as u
+from common.grading_policies import LatePercentagePenaltyPolicy
 from common.rubric import Rubric
 
 
@@ -47,6 +48,8 @@ class HW:
 
         # Here we assume the rubric file is in the scripts dir.
         self.rubric = Rubric(os.path.join(self.scripts_dir, rubric_name))
+
+        self.grading_policy = LatePercentagePenaltyPolicy()
 
         self.submission_dir = None  # Populated in subclasses.
 
