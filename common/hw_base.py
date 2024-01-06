@@ -1,31 +1,14 @@
 """hw.py: Base class for all HW's"""
 
-import json
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable
 
-import common.printing as printing
-import common.submissions as subs
-import common.utils as u
-
-
-@dataclass
-class RubricItem:
-    """Representation of a rubric item.
-
-    Attributes:
-        code: The code of this item (e.g. B1)
-        subitems: List containing (pts, desc) for each subitem (e.g. B1.1, B1.2)
-        tester: Callback function to grade this item.
-    """
-
-    code: str
-    deduct_from: int
-    subitems: List[Tuple[int, str]]
-    tester: Callable
+from common import printing as p
+from common import submissions as subs
+from common import utils as u
+from common.rubric import Rubric
 
 
 class HW:
@@ -63,43 +46,12 @@ class HW:
         self.scripts_dir = os.path.join(pygrader_root, self.hw_name)
 
         # Here we assume the rubric file is in the scripts dir.
-        rubric_path = os.path.join(self.scripts_dir, rubric_name)
-        self.rubric = self.create_rubric(rubric_path)
+        self.rubric = Rubric(os.path.join(self.scripts_dir, rubric_name))
 
         self.submission_dir = None  # Populated in subclasses.
 
-    def create_rubric(self, rubric_file):
-        """Parses a JSON rubric file into a Python representation."""
-
-        # TODO check if file exists
-        with open(rubric_file, "r") as f:
-            rubric_json = json.load(f)
-
-        rubric = {}
-        for table_k, table_v in rubric_json.items():
-            if table_k == "late_penalty":
-                rubric[table_k] = table_v
-                continue
-            if table_k not in rubric:
-                rubric[table_k] = {}
-
-            for item in table_v:
-                deduct_from = None
-                if "deducting_from" in table_v[item]:
-                    deduct_from = table_v[item]["deducting_from"]
-                ri_obg = RubricItem(
-                    table_v[item]["name"],
-                    deduct_from,
-                    list(
-                        zip(
-                            table_v[item]["points_per_subitem"],
-                            table_v[item]["desc_per_subitem"],
-                        )
-                    ),
-                    getattr(self, "grade_" + item, self.default_grader),
-                )
-                rubric[table_k][item] = ri_obg
-        return rubric
+        self.ran_rubric_item_codes = set()
+        self.ran_rubric_tests = set()
 
     def do_cd(self, path):
         """Changes directory relative to the self.submission_dir.
@@ -123,7 +75,7 @@ class HW:
         The subclass is free to override this function with more hw-specific
         logic.
         """
-        printing.print_cyan("\n[ Exiting generic grader... ]")
+        p.print_cyan("\n[ Exiting generic grader... ]")
         self.cleanup()
         sys.exit()
 
@@ -138,7 +90,7 @@ class HW:
 
     def default_grader(self):
         """Generic grade function."""
-        printing.print_red("[ Opening shell, ^D/exit when done. ]")
+        p.print_red("[ Opening shell, ^D/exit when done. ]")
         os.system("bash")
 
     def setup(self):
@@ -169,7 +121,7 @@ def directory(start_dir: str) -> Callable:
             try:
                 hw_instance.do_cd("" if start_dir == "root" else start_dir)
             except ValueError:
-                printing.print_red(
+                p.print_red(
                     "[ Couldn't cd into tester's @directory, " "opening shell.. ]"
                 )
                 os.system("bash")
