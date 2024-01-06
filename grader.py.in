@@ -1,55 +1,44 @@
 """ASSIGNMENT/grader.py: Grading logic for ASSIGNMENT assignment"""
 
-from typing import Optional
+from __future__ import annotations
+
 import os
-import shutil
 import sys
 
-import git
+from common import printing as p
+from common import submissions as subs
+from common import utils as u
+from common.hw_base import BaseHWManager, BaseHWSetup, BaseHWTester, directory
 
-from common.hw_base import BaseHWSetup, HW, directory
-import common.utils as u
-import common.printing as pr
-import common.submissions as subs
-
-ALIASES = { "ASSIGNMENT" }
+ALIASES = {"ASSIGNMENT"}
 
 
 class SETUP(BaseHWSetup):
-    """Setup logic for demo assignment"""
+    """Setup logic for ASSIGNMENT assignment"""
 
 
-class GRADER(HW):
-    """Grading rubic and tests for ASSIGNMENT assignment
-    Attributes:
-        scripts_dir: The directory containing the grading scripts
-        submission_dir: The submission directory
-        submitter: The name of the student/team
-        rubric: Python representation of the rubric
-        exit_handler: SIGINT handler
-    """
+class MANAGER(BaseHWManager):
+    """Grading rubic and information for ASSIGNMENT assignment"""
 
-    def __init__(self, submitter: Optional[str]):
-        # Set up the minimum to at least dump grades for all students
-        super().__init__("ASSIGNMENT", "rubric.json")
-        self.submitter = submitter
+    def __init__(self):
+        super().__init__("ASSIGNMENT", "rubric.json", TESTER)
+        try:
+            u.is_dir(manager.workspace_dir)
+        except ValueError:
+            sys.exit("Please run hw_setup before grading")
 
-        if submitter:
-            try:
-                u.is_dir(self.hw_workspace)
-            except ValueError:
-                sys.exit("Please run hw_setup before grading")
+    def get_students(ta: str | None = None) -> list[str]:
+        # TODO return an array of students to grade
+        return []
 
-            os.chdir(self.hw_workspace)
 
-            if not self.setup():
-                sys.exit(f"Couldn't setup {submitter}'s submission!")
+class TESTER(BaseHWTester):
+    """Grading tests for ASSIGNMENT assignment"""
 
-    def exit_handler(self, _signal, _frame):
-        """Handler for SIGINT"""
-        pr.print_cyan("\n[ Exiting ASSIGNMENT grader... ]")
-        self.cleanup()
-        sys.exit()
+    def __init__(self, submitter: str, manager: BaseHWManager):
+        super().__init__(submitter, manager)
+        if not self.setup():
+            sys.exit(f"Couldn't setup {submitter}'s submission!")
 
     def setup(self) -> bool:
         """Do any necessary setup for the submission"""
@@ -57,6 +46,12 @@ class GRADER(HW):
         # self.submission_dir = os.path.join(self.hw_workspace, "ASSIGNMENT")
         os.chdir(self.submission_dir)
         return True
+
+    def exit_handler(self, _signal, _frame):
+        """Handler for SIGINT"""
+        p.print_cyan("\n[ Exiting ASSIGNMENT grader... ]")
+        self.cleanup()
+        sys.exit()
 
     def cleanup(self):
         """Post ASSIGNMENT cleanup"""

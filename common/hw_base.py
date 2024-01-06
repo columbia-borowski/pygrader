@@ -1,4 +1,6 @@
-"""hw.py: Base class for all HW's"""
+"""common/hw_base.py: Base class for all HW managers and testers"""
+
+from __future__ import annotations
 
 import getpass
 import os
@@ -7,13 +9,51 @@ from abc import ABC, abstractmethod
 from argparse import REMAINDER, ArgumentParser, Namespace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from common import printing as p
 from common import submissions as subs
 from common import utils as u
+from common.grader import Grader
+from common.grades import Grades
 from common.grading_policies import LatePercentagePenaltyPolicy
 from common.rubric import Rubric
+
+
+class HWManager(ABC):
+    def __init__(self, hw_name: str, rubric_name: str, hw_tester_class: type[HWTester]):
+        self.hw_name = hw_name
+        self.hw_tester_class = hw_tester_class
+
+        # Find grader root relative to hw_manager.py: root/common/hw_manager.py
+        pygrader_root = Path(__file__).resolve().parent.parent
+        self.scripts_dir = os.path.join(pygrader_root, self.hw_name)
+        # Here we assume the rubric file is in the scripts dir.
+        self.rubric = Rubric(os.path.join(self.scripts_dir, rubric_name))
+
+        self.workspace_dir = None
+
+    @abstractmethod
+    def get_submission_grader(
+        self, env: dict[str, bool | str], submitter: str | None
+    ) -> Grader:
+        pass
+
+    @abstractmethod
+    def get_grading_status(
+        self, rubric_code: str, submitter: str | None = None, ta: str | None = None
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def get_grades(self, submitter: str | None = None, ta: str | None = None) -> Grades:
+        pass
+
+    def get_hw_tester(self, submitter) -> HWTester:
+        return self.hw_tester_class(submitter, self)
+
+    @abstractmethod
+    def get_students(self, ta: str | None = None) -> list[str]:
+        pass
 
 
 class HWSetup(ABC):
@@ -26,44 +66,13 @@ class HWSetup(ABC):
         pass
 
 
-class HW:
-    """Grading Base Class
-
-    Here's a visual representation of some of the fields:
-    ~
-    \_ .grade
-        \_ hwN <---- hw_workspace
-           \_ grades.json
-           \_ deadline.txt
-           \_ hwN <----- submission_dir
-
-    Attributes:
-        hw_name: the hw name (in the form 'hwN')
-        hw_workspace: Path of the form '~/.grade/hw{1,...,8}', which contains
-            the submission_dir, deadline.txt, and grades.json
-        scripts_dir: The directory that contains this hw's grading logic.
-        rubric: Python representation of the hw rubric
-        submission_dir: The student/team's submission directory
-            In the above example, this is cloned skeleton code for the
-            assignment. We simply pull down teams' tags. In Canvas-based
-            assignments, there is 1 submission_dir per student.
-    """
-
-    def __init__(self, hw_name, rubric_name):
-        self.hw_name = hw_name
-        self.hw_workspace = os.path.join(
-            Path.home(), ".grade", os.getenv("TA", default=""), hw_name
-        )
-
-        # Find grader root relative to hw_base.py: root/common/hw_base.py
-        pygrader_root = Path(__file__).resolve().parent.parent
-
-        self.scripts_dir = os.path.join(pygrader_root, self.hw_name)
-
-        # Here we assume the rubric file is in the scripts dir.
-        self.rubric = Rubric(os.path.join(self.scripts_dir, rubric_name))
-
-        self.grading_policy = LatePercentagePenaltyPolicy()
+class HWTester:
+    def __init__(
+        self, submitter: str, manager: HWManager, grader: Grader | None = None
+    ):
+        self.submitter = submitter
+        self.manager = manager
+        self.grader = grader
 
         self.submission_dir = None  # Populated in subclasses.
 
@@ -85,6 +94,11 @@ class HW:
         u.is_dir(part_dir)
         os.chdir(part_dir)
 
+    def default_grader(self):
+        """Generic grade function."""
+        p.print_red("[ Opening shell, ^D/exit when done. ]")
+        os.system("bash")
+
     def exit_handler(self, _signal, _frame):
         """Handler for SIGINT
 
@@ -96,25 +110,51 @@ class HW:
         self.cleanup()
         sys.exit()
 
-    def check_late_submission(self):
-        """Grabs the latest commit timestamp to compare against the deadline"""
-        proc = u.cmd_popen("git log -n 1 --format='%aI'")
-        iso_timestamp, _ = proc.communicate()
-
-        return subs.check_late(
-            os.path.join(self.hw_workspace, "deadline.txt"), iso_timestamp.strip("\n")
-        )
-
-    def default_grader(self):
-        """Generic grade function."""
-        p.print_red("[ Opening shell, ^D/exit when done. ]")
-        os.system("bash")
-
-    def setup(self):
-        """Performs submission setup (e.g. untar, git checkout tag)."""
-
     def cleanup(self):
         """Performs cleanup (kills stray processes, removes mods, etc.)."""
+
+
+class BaseHWManager(HWManager):
+    def __init__(
+        self,
+        hw_name: str,
+        rubric_name: str,
+        hw_tester_class: type[BaseHWTester],
+    ):
+        super().__init__(hw_name, rubric_name, hw_tester_class)
+
+        self.workspace_dir = os.path.join(
+            Path.home(), ".grade", os.getenv("TA", default=""), hw_name
+        )
+
+        self.grades_file = os.path.join(self.workspace_dir, "grades.json")
+        self.grading_policy = LatePercentagePenaltyPolicy()
+
+    def get_submission_grader(
+        self, env: dict[str, bool | str], submitter: str | None
+    ) -> Grader:
+        hw_tester = self.get_hw_tester(submitter)
+        grades = self.get_grades(submitter)
+        return Grader(env, hw_tester, grades)
+
+    def get_grades(self, submitter: str | None = None, ta: str | None = None) -> Grades:
+        if ta:
+            u.exit_with_not_supported_msg()
+
+        return Grades(self.grades_file, self.rubric, submitter, self.grading_policy)
+
+    def get_grading_status(
+        self, rubric_code: str, submitter: str | None = None, ta: str | None = None
+    ) -> bool:
+        if ta:
+            u.exit_with_not_supported_msg()
+
+        grades = self.get_grades(submitter)
+        graded, _ = grades.status(rubric_code)
+        return graded
+
+    def get_students(self, _: str | None = None) -> list[str]:
+        return []
 
 
 class BaseHWSetup(HWSetup):
@@ -190,7 +230,19 @@ class BaseHWSetup(HWSetup):
             d.write(self.DEADLINE)
 
 
-def directory(start_dir: str) -> Callable:
+class BaseHWTester(HWTester):
+    def check_late_submission(self):
+        """Grabs the latest commit timestamp to compare against the deadline"""
+        proc = u.cmd_popen("git log -n 1 --format='%aI'")
+        iso_timestamp, _ = proc.communicate()
+
+        return subs.check_late(
+            os.path.join(self.manager.workspace_dir, "deadline.txt"),
+            iso_timestamp.strip("\n"),
+        )
+
+
+def directory(start_dir: str) -> callable:
     """Decorator function that cd's into `start_dir` before the test.
 
     If start_dir is 'root', we cd into the root of the submission_dir.
@@ -211,9 +263,7 @@ def directory(start_dir: str) -> Callable:
             try:
                 hw_instance.do_cd("" if start_dir == "root" else start_dir)
             except ValueError:
-                p.print_red(
-                    "[ Couldn't cd into tester's @directory, " "opening shell.. ]"
-                )
+                p.print_red("[ Couldn't cd into tester's @directory, opening shell.. ]")
                 os.system("bash")
             return test_func(hw_instance)
 
