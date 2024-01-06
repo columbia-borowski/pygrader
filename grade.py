@@ -110,11 +110,11 @@ def main():
     tester = Grader(args.hw, args.submitter, rubric_code, env)
 
     if args.dump_grades:
-        tester.grades.dump_grades(args.submitter, rubric_code.upper())
+        tester.grades.dump(rubric_code.upper())
         sys.exit()
 
     if args.status:
-        all_graded = tester.grades.status(args.submitter, rubric_code.upper())
+        all_graded, _ = tester.grades.status(rubric_code.upper())
         sys.exit(not all_graded)  # If all graded, exit with 0 (success)
 
     if args.inspect:
@@ -166,16 +166,18 @@ class Grader:
         signal.signal(signal.SIGINT, self.hw_class.exit_handler)
 
         self.grades_file = os.path.join(self.hw_class.hw_workspace, "grades.json")
-        self.grades = Grades(self.grades_file, self.hw_class.rubric, self.submitter)
+        self.grades = Grades(
+            self.grades_file,
+            self.hw_class.rubric,
+            self.submitter,
+            self.hw_class.grading_policy,
+        )
 
     def _get_hw_class(self):
         for assignment in assignments:
             if self.hw_name.lower() in assignment.ALIASES:
                 return assignment.GRADER(self.submitter)
         sys.exit(f"Unsupported assignment: {self.hw_name}")
-
-    def print_intro(self, rubric_code: str):
-        p.print_intro(self.submitter, self.hw_name, rubric_code)
 
     def print_headerline(self, rubric_item: RubricItem):
         header = "Grading {}".format(rubric_item.code)
@@ -261,7 +263,10 @@ class Grader:
 
     def grade(self):
         key = self.rubric_code
-        self.print_intro(key)
+        p.print_intro(self.hw_class.submitter, self.hw_name, key)
+
+        self.grades.enforce_grading_policy(self.hw_class)
+
         if key.lower() == "all":
             self.grade_all()
         elif key.isalpha():
@@ -339,18 +344,7 @@ class Grader:
         # if -t is not provided, ask for grade. If -t is provided skip
         if not self.env["test_only"]:
             p.print_line()
-            is_late = self.hw_class.check_late_submission()
-            if is_late:
-                # Once we find one part of the submission that is late, the
-                # whole thing is considered late.
 
-                # Since this happens after run_and_prompt, the submission_dir
-                # will still be checked out to the specified tag.
-
-                # TODO: I actually think we shouldn't do this here, since
-                # we don't want to mark submissions that are late on master
-                # late if none of the tags are late...
-                self.grades.set_late(True)
             self.prompt_grade(rubric_item, autogrades)
         else:
             # Let the grader know if the subitems have been graded yet
