@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import common.printing as p
 import common.utils as utils
 from common.grades import Grades
-from common.hw_base import RubricItem
+from common.rubric import RubricItem
 
 _, subdirs, _ = next(os.walk(os.path.dirname(os.path.realpath(__file__))))
 assignments = []
@@ -183,12 +183,6 @@ class Grader:
             header += " ({}p, deductive)".format(rubric_item.deduct_from)
         p.print_green(header)
 
-    def print_header(self, rubric_item: RubricItem):
-        p.print_double()
-        self.print_headerline(rubric_item)
-        self.print_subitems(rubric_item)
-        p.print_double()
-
     def print_subitems(self, rubric_item: RubricItem):
         for i, (pts, desc) in enumerate(rubric_item.subitems, 1):
             p.print_magenta("{}.{} ({}p): {}".format(rubric_item.code, i, pts, desc))
@@ -285,7 +279,7 @@ class Grader:
             self.grade_item(rubric_item_obj)
 
     def grade_all(self):
-        for table in self.hw_class.rubric:
+        for table in self.hw_class.rubric.keys():
             if table == "late_penalty":
                 continue
             self.grade_table(table)
@@ -296,10 +290,11 @@ class Grader:
         for item in table:
             self.grade_item(table[item])
 
-    def grade_item(self, rubric_item: RubricItem):
+    def grade_item(self, rubric_item: RubricItem, skip_if_graded: bool = True):
         if (
             not self.env["test_only"]
             and not self.env["regrade"]
+            and skip_if_graded
             and all(
                 self.grades.is_graded(f"{rubric_item.code}.{si}")
                 for si, _ in enumerate(rubric_item.subitems, 1)
@@ -311,15 +306,32 @@ class Grader:
         # if --grade-only/-g is not provided, run tests else skip tests
         autogrades = None
         if not self.env["grade_only"]:
+            dependancies = [
+                dep_ri
+                for dep_ri in rubric_item.depends_on
+                if not dep_ri.has_test_ran(self.hw_class)
+            ]
+            if dependancies:
+                p.print_yellow(f"[ Running {rubric_item.code}'s dependancies ]")
+                for dependancy_rubric_item in dependancies:
+                    self._grade_item(dependancy_rubric_item, skip_if_graded=False)
 
             def test_wrapper():
                 nonlocal autogrades
-                self.print_header(rubric_item)
-                autogrades = rubric_item.tester()
+
+                p.print_double()
+                self.print_headerline(rubric_item)
+                for i, (pts, desc) in enumerate(rubric_item.subitems, 1):
+                    p.print_magenta(f"{rubric_item.code}.{i} ({pts}p): {desc}")
+                p.print_double()
+
+                test = rubric_item.get_test(self.hw_class)
+                autogrades = test()
+                return autogrades
 
             try:
                 utils.run_and_prompt(test_wrapper)
-            except Exception as e:  # pylint: disable=W0703
+            except Exception as e:
                 p.print_red(f"\n\n[ Exception: {e} ]")
         else:
             self.print_headerline(rubric_item)
