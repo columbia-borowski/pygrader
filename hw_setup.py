@@ -1,15 +1,17 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 """hw_setup.py: Prepares grading enviorment"""
 import argparse
-import sys
+import getpass
 import os
 import shutil
-import getpass
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
 from common import printing
 
 DEADLINE = None
+
 
 def create_dir(name):
     """Wrapper around mkdir"""
@@ -21,6 +23,7 @@ def create_dir(name):
             sys.exit(f"Creation of the directory {name} failed")
         else:
             print(f"Successfully created the directory {name}")
+
 
 def record_deadline():
     """Reads in a deadline and stores it"""
@@ -43,6 +46,7 @@ def record_deadline():
     with open("deadline.txt", "w") as d:
         d.write(DEADLINE)
 
+
 def _prompt_overwrite(hw_name: str, hw_path: str) -> bool:
     while True:
         try:
@@ -57,22 +61,26 @@ def _prompt_overwrite(hw_name: str, hw_path: str) -> bool:
     shutil.rmtree(hw_path)
     return True
 
+
 def main():
     """Prompts for homework deadline and prepares submissions for grading"""
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("hw", type=str,
-                        help="the assignment to setup (e.g. hw1)")
-    parser.add_argument("...", type=str, nargs=argparse.REMAINDER,
-                        help="any arguments for assignment setup script")
+    parser.add_argument("hw", type=str, help="the assignment to setup (e.g. hw1)")
+    parser.add_argument(
+        "...",
+        type=str,
+        nargs=argparse.REMAINDER,
+        help="any arguments for assignment setup script",
+    )
     parsed = parser.parse_args()
 
     run_dir = os.getcwd()
     tas = []
 
-    ta_file = os.path.join(Path.home(), 'tas.txt')
+    ta_file = os.path.join(Path.home(), "tas.txt")
     if os.path.exists(ta_file):
-        with open(os.path.join(Path.home(), 'tas.txt'), "r") as f:
+        with open(os.path.join(Path.home(), "tas.txt"), "r") as f:
             tas = f.read().splitlines()
 
     tas.append(getpass.getuser())
@@ -80,8 +88,9 @@ def main():
     for ta in tas:
         print(f"==={ta.rstrip()}===")
         os.chdir(run_dir)
-        root = os.path.join(Path.home(), '.grade',
-                            ta if ta != getpass.getuser() else '')
+        root = os.path.join(
+            Path.home(), ".grade", ta if ta != getpass.getuser() else ""
+        )
         create_dir(root)
 
         pygrader_dir = Path(__file__).resolve().parent
@@ -91,13 +100,12 @@ def main():
 
         os.chdir(root)
 
-        if (os.path.isdir(parsed.hw)
-            and not _prompt_overwrite(parsed.hw, parsed.hw)):
+        if os.path.isdir(parsed.hw) and not _prompt_overwrite(parsed.hw, parsed.hw):
             continue
         create_dir(parsed.hw)
         os.chdir(parsed.hw)
 
-        setup_script = os.path.join(hw_dir, 'setup')
+        setup_script = os.path.join(hw_dir, "setup")
         if os.path.isfile(setup_script):
             if os.system(f"{setup_script} {' '.join(getattr(parsed, '...'))}"):
                 sys.exit("Setup failed.")
@@ -105,5 +113,6 @@ def main():
         record_deadline()
     print(f"Ready to grade {parsed.hw}!")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

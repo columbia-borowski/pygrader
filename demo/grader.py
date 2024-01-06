@@ -1,18 +1,19 @@
 """demo/grader.py: Grading logic for demo assignment"""
 
-from typing import Optional
 import os
 import shutil
 import sys
+from typing import Optional
 
 import git
 
-from common.hw_base import HW, directory
-import common.utils as u
 import common.printing as pr
 import common.submissions as subs
+import common.utils as u
+from common.hw_base import HW, directory
 
 ALIASES = {"tutorial", "demo", "meme"}
+
 
 class GRADER(HW):
     """Grading rubic and tests for demo assignment
@@ -59,15 +60,16 @@ class GRADER(HW):
         os.mkdir(self.submission_dir)
         os.chdir(self.submission_dir)
 
-        self.repo = git.Repo.init(self.submission_dir) # Create empty repo
+        self.repo = git.Repo.init(self.submission_dir)  # Create empty repo
 
         # Apply the submission patch
-        return subs.apply_patch(self.repo,
-                os.path.join(self.hw_workspace, f"{self.submitter}.patch"))
+        return subs.apply_patch(
+            self.repo, os.path.join(self.hw_workspace, f"{self.submitter}.patch")
+        )
 
     def cleanup(self):
         """Post demo cleanup"""
-        # Remove any local changes the grader may have made 
+        # Remove any local changes the grader may have made
         self.repo.git.checkout("--", "*")
         self.repo.git.checkout("master")
         self.repo.git.clean("-f", "-d")
@@ -83,21 +85,24 @@ class GRADER(HW):
     @directory("root")
     def grade_A2(self):
         """A2: git commits"""
-        cmd = ("git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%C"
-               "reset %s %Cgreen(%cD) %C(bold blue)<%an>%Creset' "
-               "--abbrev-commit")
+        cmd = (
+            "git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%C"
+            "reset %s %Cgreen(%cD) %C(bold blue)<%an>%Creset' "
+            "--abbrev-commit"
+        )
         u.run_cmd(cmd)
 
     @directory("root")
     def grade_B1(self):
         """B1: written answers"""
         pr.print_magenta("[ Dumping Q1 below ]")
-        u.extract_between(self.written_answers, # File
-                          "= Q1 =", # Top barrier
-                          "= Q2 =", # Bottom barrier
-                          ) # This call displays the student's answer for Q1
+        u.extract_between(
+            self.written_answers,  # File
+            "= Q1 =",  # Top barrier
+            "= Q2 =",  # Bottom barrier
+        )  # This call displays the student's answer for Q1
 
-        u.prompt_continue() # Don't display Q2 until grader presses enter
+        u.prompt_continue()  # Don't display Q2 until grader presses enter
 
         pr.print_magenta("\n[ Dumping Q2 below ]")
         u.extract_between(self.written_answers, "= Q2 =", "= Q3 =")
@@ -105,11 +110,11 @@ class GRADER(HW):
         pr.print_magenta("\n[ Dumping Q3 below ]")
         u.extract_between(self.written_answers, "= Q3 =", "======")
 
-    @directory("swap") # cd into swap/ before running function
+    @directory("swap")  # cd into swap/ before running function
     def grade_C1(self):
         """C1: static analysis"""
         input(f"{pr.CVIOLET2}[ Press enter to view Makefile ]{pr.CEND}")
-        u.inspect_file("Makefile") # Opens file in bat (a better cat)
+        u.inspect_file("Makefile")  # Opens file in bat (a better cat)
 
         input(f"\n{pr.CVIOLET2}[ Press enter to view swap() ]{pr.CEND}")
         swap_fn = u.extract_function("swap.c", "swap")
@@ -118,7 +123,7 @@ class GRADER(HW):
     @directory("swap")
     def grade_C2(self):
         """C2: dynamic analysis"""
-        if u.compile_code(): # Non-zero exit code (e.g. compilation failed)
+        if u.compile_code():  # Non-zero exit code (e.g. compilation failed)
             return
 
         swap = u.cmd_popen(f"{os.path.join(os.getcwd(), 'swap')} 1 2")
@@ -132,4 +137,3 @@ class GRADER(HW):
             pr.print_green("[ PASS ]")
         else:
             pr.print_red("[ FAIL ] Didn't match 'After: 2 1'")
-

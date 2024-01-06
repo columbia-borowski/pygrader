@@ -1,23 +1,29 @@
 """
 grades.py: Logic for storing points/comments while grading
 """
+import json
 import os
 import sys
-import json
-from typing import Set, Dict, Union, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple, Union
 
 import common.utils as utils
 
-DEFAULT_LATE_PENALTY = .2
+DEFAULT_LATE_PENALTY = 0.2
 
 # Probably better to just look at a grades.json
-GradesDictType = Dict[str, # Submitter
-                      Dict[str, Union[bool, # is_late
-                                      Dict[str, # subitem_code
-                                           Dict[str, # award/comments
-                                                Union[bool, str]]]]]]
+GradesDictType = Dict[
+    str,  # Submitter
+    Dict[
+        str,
+        Union[
+            bool,  # is_late
+            Dict[str, Dict[str, Union[bool, str]]],  # subitem_code  # award/comments
+        ],
+    ],
+]
 
-class Grades():
+
+class Grades:
     """Represents the grades for the current hw
 
     Attributes:
@@ -26,6 +32,7 @@ class Grades():
         submitter: The uni/team we're currently grading
         _grades: Maps submitter -> (is_late, (item -> (pts, comments)))
     """
+
     def __init__(self, grades_file, rubric, name):
         self.grades_file = os.path.abspath(grades_file)
         self.rubric = rubric
@@ -77,7 +84,6 @@ class Grades():
                 assert code not in present_subitems
                 scores[code] = {"award": None, "comments": None}
 
-
         return grades
 
     def add_submission_entry(self):
@@ -112,8 +118,7 @@ class Grades():
         if not name:
             name = self.submitter
         # TODO: yikes, 4 dictionary accesses xD. is there a better way?
-        return (self._grades[name]["scores"][code]["award"]
-                is not None)
+        return self._grades[name]["scores"][code]["award"] is not None
 
     def is_late(self, name: Optional[str] = None) -> bool:
         """Getter for is_late"""
@@ -140,11 +145,10 @@ class Grades():
                 if isg:
                     graded_submissions += 1
 
-
-            avg = (round(all_pts / graded_submissions, 2) if graded_submissions
-                   else 0)
-            print(f"\nAverage across {graded_submissions} "
-                  f"graded submission(s): {avg}")
+            avg = round(all_pts / graded_submissions, 2) if graded_submissions else 0
+            print(
+                f"\nAverage across {graded_submissions} " f"graded submission(s): {avg}"
+            )
 
     def status(self, submitter: str, rubric_code: str) -> bool:
         if submitter:
@@ -158,8 +162,8 @@ class Grades():
             return True
 
     def get_submission_grades(
-            self, name: Optional[str] = None,
-            rubric_code: Optional[str] = None) -> Tuple[bool, float, str]:
+        self, name: Optional[str] = None, rubric_code: Optional[str] = None
+    ) -> Tuple[bool, float, str]:
         """Returns (uni, pts, comments) in tsv format
 
         Returns:
@@ -175,7 +179,7 @@ class Grades():
             name = self.submitter
 
         if not rubric_code:
-           rubric_code = "ALL"
+            rubric_code = "ALL"
 
         total_pts = 0
         all_comments = []
@@ -186,11 +190,12 @@ class Grades():
             if rubric_key == "late_penalty":
                 continue
             for item_code, rubric_item in rubric_item_mappings.items():
-                if(rubric_code != "ALL"
-                        and not item_code.startswith(rubric_code)):
+                if rubric_code != "ALL" and not item_code.startswith(rubric_code):
                     continue
-                if not all(self.is_graded(f"{item_code}.{si}", name)
-                           for si, _ in enumerate(rubric_item.subitems, 1)):
+                if not all(
+                    self.is_graded(f"{item_code}.{si}", name)
+                    for si, _ in enumerate(rubric_item.subitems, 1)
+                ):
                     st = f"{name}\tn/a\tn/a"
                     return False, total_pts, st
 
@@ -211,18 +216,18 @@ class Grades():
                     ta_comments = submission_scores[code]["comments"]
                     item_comments = ""
 
-                    if (((applied and pts <= 0)
-                        or (not applied and pts > 0))
-                        or ta_comments):
+                    if (
+                        (applied and pts <= 0) or (not applied and pts > 0)
+                    ) or ta_comments:
                         # 1. You applied a deductive rubric item
                         # 2. They lost an additive rubric item
                         # 3. You left a comment on a rubric item
 
                         # If a section only has one item, print A2 instead of
                         # A2.1 since that's how we stylize our rubrics.
-                        pretty_code_name = (item_code
-                                            if len(rubric_item.subitems) == 1
-                                            else code)
+                        pretty_code_name = (
+                            item_code if len(rubric_item.subitems) == 1 else code
+                        )
                         item_comments += f"({pretty_code_name})"
 
                     if ta_comments:
