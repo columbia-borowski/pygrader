@@ -1,18 +1,19 @@
 """hw.py: Base class for all HW's"""
 
+import json
 import os
 import sys
-from typing import Callable, Tuple, List
-import json
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, List, Tuple
 
-import common.utils as u
 import common.printing as printing
 import common.submissions as subs
+import common.utils as u
+
 
 @dataclass
-class RubricItem():
+class RubricItem:
     """Representation of a rubric item.
 
     Attributes:
@@ -20,12 +21,14 @@ class RubricItem():
         subitems: List containing (pts, desc) for each subitem (e.g. B1.1, B1.2)
         tester: Callback function to grade this item.
     """
+
     code: str
     deduct_from: int
     subitems: List[Tuple[int, str]]
     tester: Callable
 
-class HW():
+
+class HW:
     """Grading Base Class
 
     Here's a visual representation of some of the fields:
@@ -50,10 +53,9 @@ class HW():
 
     def __init__(self, hw_name, rubric_name):
         self.hw_name = hw_name
-        self.hw_workspace = os.path.join(Path.home(),
-                                         ".grade",
-                                         os.getenv("TA", default=''),
-                                         hw_name)
+        self.hw_workspace = os.path.join(
+            Path.home(), ".grade", os.getenv("TA", default=""), hw_name
+        )
 
         # Find grader root relative to hw_base.py: root/common/hw_base.py
         pygrader_root = Path(__file__).resolve().parent.parent
@@ -69,7 +71,7 @@ class HW():
     def create_rubric(self, rubric_file):
         """Parses a JSON rubric file into a Python representation."""
 
-        #TODO check if file exists
+        # TODO check if file exists
         with open(rubric_file, "r") as f:
             rubric_json = json.load(f)
 
@@ -83,14 +85,19 @@ class HW():
 
             for item in table_v:
                 deduct_from = None
-                if 'deducting_from' in table_v[item]:
-                    deduct_from = table_v[item]['deducting_from']
+                if "deducting_from" in table_v[item]:
+                    deduct_from = table_v[item]["deducting_from"]
                 ri_obg = RubricItem(
-                            table_v[item]['name'],
-                            deduct_from,
-                            list(zip(table_v[item]['points_per_subitem'],
-                                    table_v[item]['desc_per_subitem'])),
-                            getattr(self, "grade_" + item, self.default_grader))
+                    table_v[item]["name"],
+                    deduct_from,
+                    list(
+                        zip(
+                            table_v[item]["points_per_subitem"],
+                            table_v[item]["desc_per_subitem"],
+                        )
+                    ),
+                    getattr(self, "grade_" + item, self.default_grader),
+                )
                 rubric[table_k][item] = ri_obg
         return rubric
 
@@ -125,8 +132,9 @@ class HW():
         proc = u.cmd_popen("git log -n 1 --format='%aI'")
         iso_timestamp, _ = proc.communicate()
 
-        return subs.check_late(os.path.join(self.hw_workspace, "deadline.txt"),
-                               iso_timestamp.strip('\n'))
+        return subs.check_late(
+            os.path.join(self.hw_workspace, "deadline.txt"), iso_timestamp.strip("\n")
+        )
 
     def default_grader(self):
         """Generic grade function."""
@@ -138,6 +146,7 @@ class HW():
 
     def cleanup(self):
         """Performs cleanup (kills stray processes, removes mods, etc.)."""
+
 
 def directory(start_dir: str) -> Callable:
     """Decorator function that cd's into `start_dir` before the test.
@@ -154,13 +163,15 @@ def directory(start_dir: str) -> Callable:
     # for the sake of making the decorator usage sleek), let's allow
     # users to just use '/'. We can correct it here.
     start_dir = os.path.join(*start_dir.split("/"))
+
     def function_wrapper(test_func):
         def cd_then_test(hw_instance):
             try:
-                hw_instance.do_cd('' if start_dir == "root" else start_dir)
+                hw_instance.do_cd("" if start_dir == "root" else start_dir)
             except ValueError:
-                printing.print_red("[ Couldn't cd into tester's @directory, "
-                                   "opening shell.. ]")
+                printing.print_red(
+                    "[ Couldn't cd into tester's @directory, " "opening shell.. ]"
+                )
                 os.system("bash")
             return test_func(hw_instance)
 

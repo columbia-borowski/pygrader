@@ -1,71 +1,109 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 
 """grade.py: Grading driver"""
 
-import os
-import sys
-import signal
 import argparse
 import importlib
-from typing import Dict, Optional, Tuple, List
-
-from common.grades import Grades
-from common.hw_base import RubricItem
+import os
+import signal
+import sys
+from typing import Dict, List, Optional, Tuple
 
 import common.printing as p
 import common.utils as utils
+from common.grades import Grades
+from common.hw_base import RubricItem
 
 _, subdirs, _ = next(os.walk(os.path.dirname(os.path.realpath(__file__))))
 assignments = []
 for subdir in subdirs:
-    if subdir[0] != '.' and \
-       subdir != "docs" and \
-       subdir != "common" and not subdir.endswith("_common"):
+    if (
+        subdir[0] != "."
+        and subdir != "docs"
+        and subdir != "common"
+        and not subdir.endswith("_common")
+    ):
         assignments.append(importlib.import_module(f"{subdir}.grader"))
+
 
 def main():
     """Entry-point into the grader"""
-    parser = argparse.ArgumentParser(
-                            description="pygrader: Python Grading Framework")
+    parser = argparse.ArgumentParser(description="pygrader: Python Grading Framework")
 
     parser.add_argument("hw", type=str, help="homework to grade")
-    parser.add_argument("submitter", type=str, nargs="?", default=None,
-                        help="the name of student/group to grade")
-    parser.add_argument("-c", "--code", type=str, nargs="?", default="all",
-                        help=("rubric item (e.g. A, B4) to grade; "
-                              "defaults to all"))
+    parser.add_argument(
+        "submitter",
+        type=str,
+        nargs="?",
+        default=None,
+        help="the name of student/group to grade",
+    )
+    parser.add_argument(
+        "-c",
+        "--code",
+        type=str,
+        nargs="?",
+        default="all",
+        help=("rubric item (e.g. A, B4) to grade; " "defaults to all"),
+    )
 
     grading_mode = parser.add_mutually_exclusive_group()
-    grading_mode.add_argument("-g", "--grade-only", action="store_true",
-                              help="grade without running any tests",
-                              dest="grade_only")
-    grading_mode.add_argument("-t", "--test-only", action="store_true",
-                        help=("run tests without grading"), dest="test_only")
+    grading_mode.add_argument(
+        "-g",
+        "--grade-only",
+        action="store_true",
+        help="grade without running any tests",
+        dest="grade_only",
+    )
+    grading_mode.add_argument(
+        "-t",
+        "--test-only",
+        action="store_true",
+        help=("run tests without grading"),
+        dest="test_only",
+    )
     script_mode = parser.add_mutually_exclusive_group()
-    script_mode.add_argument("-r", "--regrade", action="store_true",
-                             help="do not skip previously graded items",
-                             dest="regrade")
-    script_mode.add_argument("-d", "--dump-grades", action="store_true",
-                             help=("dump grades for this homework -- "
-                                   "all if no submitter specified"),
-                             dest="dump_grades")
-    script_mode.add_argument("-s", "--status", action="store_true",
-                             help=("return grading status for this homework -- "
-                                   "all if no submitter specified"),
-                             dest="status")
-    script_mode.add_argument("-i", "--inspect", action="store_true",
-                             help=("drop into shell to inspect submission"),
-                             dest="inspect")
+    script_mode.add_argument(
+        "-r",
+        "--regrade",
+        action="store_true",
+        help="do not skip previously graded items",
+        dest="regrade",
+    )
+    script_mode.add_argument(
+        "-d",
+        "--dump-grades",
+        action="store_true",
+        help=("dump grades for this homework -- " "all if no submitter specified"),
+        dest="dump_grades",
+    )
+    script_mode.add_argument(
+        "-s",
+        "--status",
+        action="store_true",
+        help=(
+            "return grading status for this homework -- "
+            "all if no submitter specified"
+        ),
+        dest="status",
+    )
+    script_mode.add_argument(
+        "-i",
+        "--inspect",
+        action="store_true",
+        help=("drop into shell to inspect submission"),
+        dest="inspect",
+    )
 
     args = parser.parse_args()
     env = {
-            "regrade": args.regrade,
-            "grade_only": args.grade_only,
-            "test_only": args.test_only,
-            "dump_grades": args.dump_grades,
-            "status": args.status,
-            "inspect": args.inspect
-          }
+        "regrade": args.regrade,
+        "grade_only": args.grade_only,
+        "test_only": args.test_only,
+        "dump_grades": args.dump_grades,
+        "status": args.status,
+        "inspect": args.inspect,
+    }
 
     rubric_code = args.code if args.code else "all"
 
@@ -75,18 +113,18 @@ def main():
         tester.grades.dump_grades(args.submitter, rubric_code.upper())
         sys.exit()
 
-
     if args.status:
         all_graded = tester.grades.status(args.submitter, rubric_code.upper())
-        sys.exit(not all_graded) # If all graded, exit with 0 (success)
+        sys.exit(not all_graded)  # If all graded, exit with 0 (success)
 
     if args.inspect:
         # (pygrader)user@host:pwd $
-        prompt = (f"{p.CGREEN}({p.CYELLOW}pygrader{p.CGREEN}){p.CEND}"
-                  f":{p.CBLUE}\\w{p.CCYAN} \${p.CEND} ")
+        prompt = (
+            f"{p.CGREEN}({p.CYELLOW}pygrader{p.CGREEN}){p.CEND}"
+            f":{p.CBLUE}\\w{p.CCYAN} \${p.CEND} "
+        )
         p.print_red("[ ^D/exit when done ]")
-        os.system(f"PROMPT_COMMAND='PS1=\"{prompt}\"; unset PROMPT_COMMAND' "
-                  f"bash")
+        os.system(f"PROMPT_COMMAND='PS1=\"{prompt}\"; unset PROMPT_COMMAND' " f"bash")
         sys.exit()
 
     if not args.submitter:
@@ -94,15 +132,14 @@ def main():
     tester.grade()
 
     # TODO: add progress/percentage complete?
-    p.print_magenta(
-            f"\n[ Pretty-printing pts/comments for {args.submitter}... ]")
-    _, _, s = tester.grades.get_submission_grades(args.submitter,
-                                                  rubric_code.upper())
+    p.print_magenta(f"\n[ Pretty-printing pts/comments for {args.submitter}... ]")
+    _, _, s = tester.grades.get_submission_grades(args.submitter, rubric_code.upper())
     print(s)
     # clean up
     tester.hw_class.cleanup()
 
-class Grader():
+
+class Grader:
     """Represents the current hw grading session
 
     Attributes:
@@ -115,8 +152,10 @@ class Grader():
         grades_file: Path to JSON file containing session grades
         grades: Maps (uni/team) -> (rubric item -> (pts, comments))
     """
-    def __init__(self, hw_name: str, submitter: str, rubric_code: str,
-                 env: Dict[str, bool]):
+
+    def __init__(
+        self, hw_name: str, submitter: str, rubric_code: str, env: Dict[str, bool]
+    ):
         self.hw_name = hw_name
         self.rubric_code = rubric_code
         self.submitter = submitter
@@ -126,10 +165,8 @@ class Grader():
 
         signal.signal(signal.SIGINT, self.hw_class.exit_handler)
 
-        self.grades_file = os.path.join(self.hw_class.hw_workspace,
-                                        "grades.json")
-        self.grades = Grades(self.grades_file, self.hw_class.rubric,
-                             self.submitter)
+        self.grades_file = os.path.join(self.hw_class.hw_workspace, "grades.json")
+        self.grades = Grades(self.grades_file, self.hw_class.rubric, self.submitter)
 
     def _get_hw_class(self):
         for assignment in assignments:
@@ -141,9 +178,9 @@ class Grader():
         p.print_intro(self.submitter, self.hw_name, rubric_code)
 
     def print_headerline(self, rubric_item: RubricItem):
-        header = 'Grading {}'.format(rubric_item.code)
+        header = "Grading {}".format(rubric_item.code)
         if rubric_item.deduct_from:
-            header += ' ({}p, deductive)'.format(rubric_item.deduct_from)
+            header += " ({}p, deductive)".format(rubric_item.deduct_from)
         p.print_green(header)
 
     def print_header(self, rubric_item: RubricItem):
@@ -154,21 +191,25 @@ class Grader():
 
     def print_subitems(self, rubric_item: RubricItem):
         for i, (pts, desc) in enumerate(rubric_item.subitems, 1):
-            p.print_magenta("{}.{} ({}p): {}".format(rubric_item.code,
-                                                     i, pts, desc))
+            p.print_magenta("{}.{} ({}p): {}".format(rubric_item.code, i, pts, desc))
 
     def print_subitem_grade(self, code: str, warn: bool = False):
         if self.grades.is_graded(code):
             # We've graded this already. Let's show the current grade.
             awarded = self.grades[code]["award"]
             comments = self.grades[code]["comments"]
-            p.print_green(f"[ ({code}) Previous Grade: awarded={awarded} "
-                          f"comments='{comments}']")
+            p.print_green(
+                f"[ ({code}) Previous Grade: awarded={awarded} "
+                f"comments='{comments}']"
+            )
         elif warn:
             p.print_yellow(f"[ {code} hasn't been graded yet ]")
 
-    def prompt_grade(self, rubric_item: RubricItem,
-                     autogrades: Optional[List[Tuple[str, str]]] = None):
+    def prompt_grade(
+        self,
+        rubric_item: RubricItem,
+        autogrades: Optional[List[Tuple[str, str]]] = None,
+    ):
         """Prompts the TA for pts/comments"""
 
         if autogrades:
@@ -177,7 +218,7 @@ class Grader():
 
             for i, (a, c) in enumerate(autogrades, 1):
                 subitem_code = f"{rubric_item.code}.{i}"
-                self.grades[subitem_code]["award"] = (a == 'y')
+                self.grades[subitem_code]["award"] = a == "y"
                 self.grades[subitem_code]["comments"] = c
 
         else:
@@ -189,7 +230,7 @@ class Grader():
                     try:
                         award = input(f"{p.CBLUE2}Apply? [y/n]: {p.CEND}")
                         award = award.strip().lower()
-                        if award in ('y', 'n'):
+                        if award in ("y", "n"):
                             break
                     except EOFError:
                         print("^D")
@@ -202,7 +243,7 @@ class Grader():
                         print("^D")
                         continue
 
-                self.grades[subitem_code]["award"] = (award == 'y')
+                self.grades[subitem_code]["award"] = award == "y"
                 self.grades[subitem_code]["comments"] = comments.strip()
 
         self.grades.synchronize()
@@ -222,13 +263,12 @@ class Grader():
         """
         keys = [*self.hw_class.rubric[item_key[0]].keys()]
         if item_key not in keys:
-            raise ValueError(f"{self.hw_name} does not have "
-                             f"rubric item {item_key}")
+            raise ValueError(f"{self.hw_name} does not have " f"rubric item {item_key}")
 
     def grade(self):
         key = self.rubric_code
         self.print_intro(key)
-        if key.lower() == 'all':
+        if key.lower() == "all":
             self.grade_all()
         elif key.isalpha():
             # e.g. A, B, C, ...
@@ -257,16 +297,21 @@ class Grader():
             self.grade_item(table[item])
 
     def grade_item(self, rubric_item: RubricItem):
-        if (not self.env["test_only"] and not self.env["regrade"]
-            and all(self.grades.is_graded(f"{rubric_item.code}.{si}")
-                     for si, _ in enumerate(rubric_item.subitems, 1))):
-            p.print_yellow(
-                    f"[ {rubric_item.code} has been graded, skipping... ]")
+        if (
+            not self.env["test_only"]
+            and not self.env["regrade"]
+            and all(
+                self.grades.is_graded(f"{rubric_item.code}.{si}")
+                for si, _ in enumerate(rubric_item.subitems, 1)
+            )
+        ):
+            p.print_yellow(f"[ {rubric_item.code} has been graded, skipping... ]")
             return
 
         # if --grade-only/-g is not provided, run tests else skip tests
         autogrades = None
         if not self.env["grade_only"]:
+
             def test_wrapper():
                 nonlocal autogrades
                 self.print_header(rubric_item)
@@ -302,5 +347,5 @@ class Grader():
                 self.print_subitem_grade(code, warn=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

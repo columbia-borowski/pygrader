@@ -3,10 +3,8 @@
 # install apt packages
 sudo apt install -y $(cat apt-packages.txt)
 
-# install bat via deb package as it isn't available in Debian 10
-wget https://github.com/sharkdp/bat/releases/download/v0.15.4/bat_0.15.4_amd64.deb
-sudo dpkg -i ./bat_0.15.4_amd64.deb
-rm bat_0.15.4_amd64.deb
+# bat is instlled as "batcat" symlink it to bat
+sudo ln -s /usr/bin/batcat /usr/bin/bat
 
 # install python dependencies
-python3.7 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
