@@ -1,49 +1,57 @@
 """demo/grader.py: Grading logic for demo assignment"""
 
+from __future__ import annotations
+
 import os
 import shutil
 import sys
-from typing import Optional
 
 import git
 
-import common.printing as pr
-import common.submissions as subs
-import common.utils as u
-from common.hw_base import BaseHWSetup, HW, directory
+from common import printing as pr
+from common import submissions as subs
+from common import utils as u
+from common.hw_base import BaseHWManager, BaseHWSetup, BaseHWTester, directory
 
-ALIASES = {"tutorial", "demo", "meme"}
+ALIASES = {"demo", "tutorial", "meme"}
 
 
 class SETUP(BaseHWSetup):
     """Setup logic for demo assignment"""
 
 
-class GRADER(HW):
-    """Grading rubic and tests for demo assignment
-    Attributes:
-        scripts_dir: The directory containing the grading scripts
-        submission_dir: The submission directory
-        submitter: The name of the student/team
-        rubric: Python representation of the rubric
-        exit_handler: SIGINT handler
-    """
+class MANAGER(BaseHWManager):
+    """Grading rubic and information for demo assignment"""
 
-    def __init__(self, submitter: Optional[str]):
-        # Set up the minimum to at least dump grades for all students
-        super().__init__("demo", "rubric.json")
-        self.submitter = submitter
+    def __init__(self):
+        super().__init__("demo", "rubric.json", TESTER)
 
-        if submitter:
-            try:
-                u.is_dir(self.hw_workspace)
-            except ValueError:
-                sys.exit("Please run hw_setup before grading")
+    def get_students(self, ta: str | None = None) -> list[str]:
+        if ta:
+            u.exit_with_not_supported_msg()
 
-            os.chdir(self.hw_workspace)
+        return [
+            f.replace(".patch", "")
+            for f in os.listdir(os.path.join(self.workspace_dir))
+            if f.endswith(".patch")
+        ]
 
-            if not self.setup():
-                sys.exit(f"Couldn't setup {submitter}'s submission!")
+
+class TESTER(BaseHWTester):
+    """Grading rubic and tests for demo assignment"""
+
+    def __init__(self, submitter: str, manager: BaseHWManager):
+        super().__init__(submitter, manager)
+
+        try:
+            u.is_dir(manager.workspace_dir)
+        except ValueError:
+            sys.exit("Please run hw_setup before grading")
+
+        os.chdir(manager.workspace_dir)
+
+        if not self.setup():
+            sys.exit(f"Couldn't setup {submitter}'s submission!")
 
         # Initialize other properties here
         self.written_answers = "written_answers.txt"
@@ -57,7 +65,7 @@ class GRADER(HW):
     def setup(self) -> bool:
         """Do any necessary setup for the submission"""
         # Set directory containing submission repo
-        self.submission_dir = os.path.join(self.hw_workspace, self.submitter)
+        self.submission_dir = os.path.join(self.manager.workspace_dir, self.submitter)
 
         # Remove the dir to start fresh
         shutil.rmtree(self.submission_dir, ignore_errors=True)
@@ -68,14 +76,15 @@ class GRADER(HW):
 
         # Apply the submission patch
         return subs.apply_patch(
-            self.repo, os.path.join(self.hw_workspace, f"{self.submitter}.patch")
+            self.repo,
+            os.path.join(self.manager.workspace_dir, f"{self.submitter}.patch"),
         )
 
     def cleanup(self):
         """Post demo cleanup"""
         # Remove any local changes the grader may have made
         self.repo.git.checkout("--", "*")
-        self.repo.git.checkout("master")
+        self.repo.git.checkout("main")
         self.repo.git.clean("-f", "-d")
 
     @directory("root")

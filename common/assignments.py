@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from common.hw_base import HW, HWSetup
+from common.hw_base import HWManager, HWSetup
 
 _, subdirs, _ = next(os.walk(os.path.dirname(Path(__file__).resolve().parent)))
 ASSIGNMENTS = []
@@ -20,8 +20,8 @@ for subdir in subdirs:
             continue
 
 
-def get_assignment_grader(hw_name: str, submitter: str) -> HW:
-    return _get_assignment_module(hw_name).GRADER(submitter)
+def get_assignment_manager(hw_name: str) -> HWManager:
+    return _get_assignment_module(hw_name).MANAGER()
 
 
 def get_assignment_setup(hw_name: str) -> HWSetup:

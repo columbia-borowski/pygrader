@@ -14,7 +14,7 @@ from common.grading_policies import GradingPolicy
 from common.rubric import Rubric
 
 if TYPE_CHECKING:
-    from common.hw_base import HW
+    from common.hw_base import HWTester
 
 # Probably better to just look at a grades.json
 GradesDictType: TypeAlias = dict[str, dict[str, list[dict[str, dict[str, bool | str]]]]]
@@ -120,7 +120,7 @@ class Grades:
 
         return self._grades[name]["scores"][code]["award"] is not None
 
-    def enforce_grading_policy(self, hw_tester: HW):
+    def enforce_grading_policy(self, hw_tester: HWTester):
         self._grades[self.submitter][
             "grading_policy"
         ] = self.grading_policy.enforce_policy(hw_tester)
