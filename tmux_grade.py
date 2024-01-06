@@ -18,7 +18,7 @@ def main(hw, student, table):
     other_pane = window.split_window(vertical=False)
     window.select_layout("even-horizontal")
     other_pane.send_keys("sudo dmesg -w")
-    main_pane.send_keys("./grade.py {} {} {}".format(hw, student, table))
+    main_pane.send_keys(f"./grade.py {hw} {student} {table}")
     serever.attach_session(target_session="Grade HW")
 
 
