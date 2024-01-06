@@ -88,7 +88,7 @@ def checkout_to_team_branch(
     return True
 
 
-def tag(tag_name: str) -> Callable:  # pylint: disable=unused-argument
+def tag(tag_name: str, clean: bool = False) -> Callable:
     """Decorator function that checks out to tag_name before the test.
 
     If tag_name is 'master', we checkout to the submission's master branch,
@@ -116,12 +116,10 @@ def tag(tag_name: str) -> Callable:  # pylint: disable=unused-argument
                     printing.print_red(f"[ Couldn't checkout to {tag_name} ]")
                     printing.print_cyan("[ Opening shell -- ^D/exit when resolved ]")
                     os.system("bash")
-            else:
-                # No cleaning in case the TA made necessary changes to the
-                # submission that we don't want to throw away
-                printing.print_green(f"[ Checked out to {tag_name} ]\n")
 
-            hw_instance.repo.git.clean("-f", "-d")
+            if clean:
+                hw_instance.repo.git.clean("-f", "-d")
+
             return test_func(hw_instance)
 
         return checkout_to_tag_then_test
