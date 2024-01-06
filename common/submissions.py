@@ -1,17 +1,17 @@
-"""submissions.py: Utils that help dealing with submissions"""
+"""common/submissions.py: Utils that help dealing with submissions"""
 
 import os
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable
 
 import git
 from dateutil.relativedelta import relativedelta
 from pytz import timezone
 
-import common.printing as printing
+from common import printing
 
 
-def check_late(deadline_path, iso_timestamp):
+def check_late(deadline_path: str, iso_timestamp: str) -> bool:
     """Checks if iso_timestamp is past the deadline
 
     Arguments:
@@ -22,7 +22,7 @@ def check_late(deadline_path, iso_timestamp):
     """
     submission = datetime.fromisoformat(iso_timestamp)
 
-    with open(deadline_path, "r") as d:
+    with open(deadline_path, "r", encoding="utf-8") as d:
         deadline_string = d.readline()
 
     if not deadline_string:
@@ -48,7 +48,7 @@ def check_late(deadline_path, iso_timestamp):
 
 
 def checkout_to_team_branch(
-    repo: git.Repo, team_repo_id: str, team: str, branch_name: str = "master"
+    repo: git.Repo, team_repo_id: str, team: str, branch_name: str = "main"
 ) -> bool:
     repo.git.checkout(branch_name)  # Make sure we're on the branch (skel).
     try:
@@ -65,7 +65,7 @@ def checkout_to_team_branch(
 
     repo.git.fetch(team, "--tags")
     try:
-        repo.git.fetch(team, "master")
+        repo.git.fetch(team, "main")
     except git.GitError:
         repo.git.fetch(team, "main")
 
@@ -77,7 +77,7 @@ def checkout_to_team_branch(
         # This branch doesn't exist.
         pass
 
-    if branch_name == "master":
+    if branch_name == "main":
         try:
             repo.git.checkout("-b", team_branch, f"{team}/{branch_name}")
         except git.GitError:
@@ -105,13 +105,13 @@ def tag(tag_name: str, clean: bool = False) -> Callable:
                 # Clean first
                 hw_instance.repo.git.checkout("--", "*")
                 try:
-                    if tag_name == "master":
+                    if tag_name == "main":
                         tag_name = f"{hw_instance.submitter}"
                         hw_instance.repo.git.checkout(tag_name)
-                        printing.print_green(f"[ Checked out to {tag_name}/master ]\n")
+                        # printing.print_cyan(f"[ Checked out to {tag_name}/main ]\n")
                     else:
                         hw_instance.repo.git.checkout(tag_name)
-                        printing.print_green(f"[ Checked out to {tag_name} ]\n")
+                        # printing.print_cyan(f"[ Checked out to {tag_name} ]\n")
                 except git.GitError:
                     printing.print_red(f"[ Couldn't checkout to {tag_name} ]")
                     printing.print_cyan("[ Opening shell -- ^D/exit when resolved ]")
@@ -135,7 +135,7 @@ def to_branch(hw_instance, branch_name: str):
         hw_instance.repo.git.checkout("--", "*")
         try:
             hw_instance.repo.git.checkout(target_branch)
-            printing.print_green(f"[ Checked out to {branch_name} ]\n")
+            printing.print_cyan(f"[ Checked out to {branch_name} ]\n")
         except git.GitError:
             printing.print_red(f"[ Couldn't checkout to {branch_name} ]")
             printing.print_cyan("[ Opening shell -- ^D/exit when resolved ]")
@@ -143,12 +143,12 @@ def to_branch(hw_instance, branch_name: str):
     else:
         # No cleaning in case the TA made necessary changes to the
         # submission that we don't want to throw away
-        printing.print_green(f"[ Checked out to {branch_name} ]\n")
+        printing.print_cyan(f"[ Checked out to {branch_name} ]\n")
 
     hw_instance.repo.git.clean("-f", "-d")
 
 
-def branch(branch_name: str) -> Callable:  # pylint: disable=unused-argument
+def branch(branch_name: str) -> Callable:
     """Decorator function that checks out submitter-branch_name before the test.
 
     This is assumed to be in reference to a submission branch, which follows the

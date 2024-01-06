@@ -1,4 +1,4 @@
-"""printing.py: Colored output helpers"""
+"""common/printing.py: Colored output helpers"""
 
 CEND = "\33[0m"
 CBOLD = "\33[1m"
@@ -16,6 +16,8 @@ CBLUE = "\33[34m"
 CVIOLET = "\33[35m"
 CBEIGE = "\33[36m"
 CWHITE = "\33[37m"
+CORANGE = "\33[38;5;208m"
+
 
 CBLACKBG = "\33[40m"
 CREDBG = "\33[41m"
@@ -47,37 +49,42 @@ CWHITEBG2 = "\33[107m"
 
 def print_red(s):
     """Prints s in red"""
-    print("{}{}{}".format(CRED2, s, CEND))
+    print(f"{CRED2}{s}{CEND}")
+
+
+def print_orange(s):
+    """Prints s in red"""
+    print(f"{CORANGE}{s}{CEND}")
 
 
 def print_green(s):
     """Prints s in green"""
-    print("{}{}{}".format(CGREEN2, s, CEND))
+    print(f"{CGREEN2}{s}{CEND}")
 
 
 def print_yellow(s):
     """Prints s in yellow"""
-    print("{}{}{}".format(CYELLOW2, s, CEND))
+    print(f"{CYELLOW2}{s}{CEND}")
 
 
 def print_magenta(s):
     """Prints s in magenta"""
-    print("{}{}{}".format(CVIOLET2, s, CEND))
+    print(f"{CVIOLET2}{s}{CEND}")
 
 
 def print_purple(s):
     """Prints s in purple"""
-    print("{}{}{}".format(CVIOLET, s, CEND))
+    print(f"{CVIOLET}{s}{CEND}")
 
 
 def print_cyan(s):
     """Prints s in cyan"""
-    print("{}{}{}".format(CCYAN, s, CEND))
+    print(f"{CCYAN}{s}{CEND}")
 
 
 def print_light_gray(s):
     """Prints s in light gray"""
-    print("{}{}{}".format(CGRAYL, s, CEND))
+    print(f"{CGRAYL}{s}{CEND}")
 
 
 def print_line():
@@ -88,10 +95,10 @@ def print_double():
     print_cyan("=" * 85)
 
 
-def print_intro(team, hw, code):
+def print_intro(submitter, hw, code):
     print_double()
     print(
-        f"{CCYAN}Name:{CEND} {CVIOLET2}{team}{CEND}  {CCYAN}HW:{CEND} "
+        f"{CCYAN}Name:{CEND} {CVIOLET2}{submitter}{CEND}  {CCYAN}HW:{CEND} "
         f"{CVIOLET2}{hw}{CEND}  {CCYAN}Rubric Code:{CEND} "
         f"{CVIOLET2}{code}{CEND}"
     )
@@ -106,5 +113,5 @@ def print_between_cyan_line(msg):
 
 def print_outro(table_item):
     print_line()
-    print_green("End test of {}".format(table_item))
+    print_green(f"End test of {table_item}")
     print_double()
