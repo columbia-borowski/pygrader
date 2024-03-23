@@ -145,16 +145,19 @@ class Grades:
 
         return all_graded, graded_count
 
-    def print_stats(self):
+    def print_stats(self, rubric_code: str = "ALL", non_zero: bool = True):
         if self.submitter:
             return
 
-        grades_list = [
-            grade
-            for uni in self._grades
-            if (grade := self._get_submission_grades(uni, "ALL")[1]) > 0
-        ]
-        p.print_magenta("Computed using nonzero scores.")
+        grades_list = []
+        for uni in self._grades:
+            is_graded, pts, _ = self._get_submission_grades(uni, rubric_code)
+            if is_graded and (not non_zero or pts > 0):
+                grades_list.append(pts)
+
+        if non_zero:
+            p.print_magenta("Computed using nonzero scores.")
+
         print(f"Student count: {len(grades_list)}")
         print(f"Average grade: {statistics.mean(grades_list):.2f}")
         print(f"Median grade: {statistics.median(grades_list):.2f}")

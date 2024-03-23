@@ -11,12 +11,19 @@ from common.command_modules import (
     DumpGradesModule,
     GradeModule,
     InspectModule,
+    StatsModule,
 )
 
 
 def load_and_run_pygrader(custom_modules: Iterable[CommandModule] | None = None):
     """Load and run the pygrader framework with the provided custom modules."""
-    modules = [GradeModule(), DumpGradesModule(), CheckStatusModule(), InspectModule()]
+    modules = [
+        GradeModule(),
+        DumpGradesModule(),
+        CheckStatusModule(),
+        InspectModule(),
+        StatsModule(),
+    ]
     if custom_modules:
         modules.extend(custom_modules)
 

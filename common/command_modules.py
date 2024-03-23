@@ -187,3 +187,24 @@ class InspectModule(CommandModule):
         os.system(f"PROMPT_COMMAND='PS1=\"{prompt}\"; unset PROMPT_COMMAND' " f"bash")
 
         tester.cleanup()
+
+
+class StatsModule(CommandWithHWDetailsModule):
+    def __init__(self):
+        super().__init__("stats")
+
+    def extend_parser(self, parser: ArgumentParser):
+        super().extend_parser(parser)
+        parser.add_argument(
+            "-n",
+            "--non-zero",
+            action="store_true",
+            help=("compute non zero stats"),
+            dest="non_zero",
+        )
+
+    def run(self, parsed: Namespace):
+        hw_manager = get_assignment_manager(parsed.hw)
+        hw_manager.get_grades(parsed.submitter, parsed.ta).print_stats(
+            parsed.code, parsed.non_zero
+        )
