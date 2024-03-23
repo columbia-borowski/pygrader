@@ -137,7 +137,7 @@ class DumpGradesModule(CommandWithHWDetailsModule):
     """Command module for dumping grades."""
 
     def __init__(self):
-        super().__init__("dump-grades")
+        super().__init__("dump")
 
     def run(self, parsed: Namespace):
         hw_manager = get_assignment_manager(parsed.hw)
@@ -149,7 +149,7 @@ class CheckStatusModule(CommandWithHWDetailsModule):
     """Command module for checking grading status."""
 
     def __init__(self):
-        super().__init__("check-status")
+        super().__init__("status")
 
     def run(self, parsed: Namespace):
         hw_manager = get_assignment_manager(parsed.hw)
