@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from common.command_modules import (
     CheckStatusModule,
     CommandModule,
+    CompositeCommandModule,
     DumpGradesModule,
     GradeModule,
     InspectModule,
@@ -31,14 +32,10 @@ def load_and_run_pygrader(custom_modules: Iterable[CommandModule] | None = None)
 
 
 def load_and_run_modules(modules: Iterable[CommandModule], **kwargs):
+    main_module = CompositeCommandModule("main", "command", modules)
+
     parser = ArgumentParser(**kwargs)
-    subparsers = parser.add_subparsers(required=True, dest="command")
+    main_module.extend_parser(parser)
 
-    modules_map = {}
-    for module in modules:
-        modules_map[module.name] = module
-        subparser = subparsers.add_parser(module.name)
-        module.extend_parser(subparser)
-
-    args = parser.parse_args()
-    modules_map[args.command].run(args)
+    parsed = parser.parse_args()
+    main_module.run(parsed)
