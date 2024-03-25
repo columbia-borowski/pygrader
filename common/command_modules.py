@@ -1,9 +1,12 @@
 """common/command_modules.py: Base class for command modules and base modules"""
 
+from __future__ import annotations
+
 import os
 import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
+from collections.abc import Iterable
 
 from common import printing as p
 from common.assignments import get_assignment_manager
@@ -12,8 +15,9 @@ from common.assignments import get_assignment_manager
 class CommandModule(ABC):
     """Abstract base class for command modules."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, parent_command_module: CommandModule = None):
         self.name = name
+        self.parent_command_module = parent_command_module
 
     @abstractmethod
     def extend_parser(self, parser: ArgumentParser):
@@ -22,6 +26,27 @@ class CommandModule(ABC):
     @abstractmethod
     def run(self, parsed: Namespace):
         pass
+
+
+class CompositeCommandModule(CommandModule):
+    """Abstract base class for composite command modules."""
+
+    def __init__(self, name: str, dest: str, modules: Iterable[CommandModule]):
+        super().__init__(name)
+        self.dest = dest
+        self.modules = modules
+
+    def extend_parser(self, parser: ArgumentParser):
+        subparsers = parser.add_subparsers(required=True, dest=self.dest)
+        self.modules_map = {}
+        for module in self.modules:
+            module.parent_command_module = self
+            self.modules_map[module.name] = module
+            subparser = subparsers.add_parser(module.name)
+            module.extend_parser(subparser)
+
+    def run(self, parsed: Namespace):
+        self.modules_map[getattr(parsed, self.dest)].run(parsed)
 
 
 class CommandWithHWDetailsModule(CommandModule):

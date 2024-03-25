@@ -13,6 +13,7 @@ from pathlib import Path
 from common import printing as p
 from common import submissions as subs
 from common import utils as u
+from common.command_modules import CommandModule
 from common.grader import Grader
 from common.grades import Grades
 from common.grading_policies import LatePercentagePenaltyPolicy
@@ -56,14 +57,11 @@ class HWManager(ABC):
         pass
 
 
-class HWSetup(ABC):
-    @abstractmethod
-    def extend_parser(self, parser: ArgumentParser):
-        pass
+class HWSetup(CommandModule):
+    """alias for command module"""
 
-    @abstractmethod
-    def run(self, parsed: Namespace):
-        pass
+    def __init__(self):
+        super().__init__("hw_setup")
 
 
 class HWTester:
@@ -159,6 +157,7 @@ class BaseHWManager(HWManager):
 
 class BaseHWSetup(HWSetup):
     def __init__(self):
+        super().__init__()
         self.DEADLINE = None
 
     def extend_parser(self, parser: ArgumentParser):
