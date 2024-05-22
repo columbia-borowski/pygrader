@@ -121,10 +121,11 @@ class Grades:
         return self._grades[name]["scores"][code]["award"] is not None
 
     def enforce_grading_policy(self, hw_tester: HWTester):
-        self._grades[self.submitter][
-            "grading_policy"
-        ] = self.grading_policy.enforce_policy(hw_tester)
-        self.synchronize()
+        if "grading_policy" not in self._grades[self.submitter]:
+            self._grades[self.submitter][
+                "grading_policy"
+            ] = self.grading_policy.enforce_policy(hw_tester)
+            self.synchronize()
 
     def dump(self, rubric_code: str):
         student_list = self._grades if not self.submitter else [self.submitter]
