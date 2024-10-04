@@ -230,6 +230,8 @@ class StatsModule(CommandWithHWDetailsModule):
 
     def run(self, parsed: Namespace):
         hw_manager = get_assignment_manager(parsed.hw)
-        hw_manager.get_grades(parsed.submitter, parsed.ta).print_stats(
+        stats = hw_manager.get_grades(parsed.submitter, parsed.ta).stats(
             parsed.code, parsed.non_zero
         )
+
+        p.print_stats(stats)

@@ -8,7 +8,6 @@ import statistics
 import sys
 from typing import TYPE_CHECKING, TypeAlias
 
-from common import printing as p
 from common import utils
 from common.grading_policies import GradingPolicy
 from common.rubric import Rubric
@@ -146,9 +145,9 @@ class Grades:
 
         return all_graded, graded_count
 
-    def print_stats(self, rubric_code: str = "ALL", non_zero: bool = True):
+    def stats(self, rubric_code: str = "ALL", non_zero: bool = True):
         if self.submitter:
-            return
+            raise ValueError("Cannot return stats for a single submission")
 
         grades_list = []
         for uni in self._grades:
@@ -156,13 +155,13 @@ class Grades:
             if is_graded and (not non_zero or pts > 0):
                 grades_list.append(pts)
 
-        if non_zero:
-            p.print_magenta("Computed using nonzero scores.")
-
-        print(f"Student count: {len(grades_list)}")
-        print(f"Average grade: {statistics.mean(grades_list):.2f}")
-        print(f"Median grade: {statistics.median(grades_list):.2f}")
-        print(f"Standard dev: {statistics.stdev(grades_list):.2f}")
+        return {
+            "is_non_zero": non_zero,
+            "count": len(grades_list),
+            "avg": statistics.mean(grades_list),
+            "median": statistics.median(grades_list),
+            "std_dev": statistics.stdev(grades_list),
+        }
 
     def _get_submission_grades(
         self, name: str | None = None, rubric_code: str | None = None
