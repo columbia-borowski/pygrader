@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from argparse import REMAINDER, ArgumentParser, Namespace
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from common import printing as p
 from common import submissions as subs
@@ -77,6 +78,10 @@ class HWTester:
         self.ran_rubric_item_codes = set()
         self.ran_rubric_tests = set()
 
+    @abstractmethod
+    def get_grading_policy_data(self) -> dict[str, Any]:
+        pass
+
     def do_cd(self, path):
         """Changes directory relative to the self.submission_dir.
 
@@ -126,7 +131,7 @@ class BaseHWManager(HWManager):
         )
 
         self.grades_file = os.path.join(self.workspace_dir, "grades.json")
-        self.grading_policy = LatePercentagePenaltyPolicy()
+        self.grading_policies = (LatePercentagePenaltyPolicy(),)
 
     def get_submission_grader(
         self, env: dict[str, bool | str], submitter: str | None
@@ -139,7 +144,7 @@ class BaseHWManager(HWManager):
         if ta:
             u.exit_with_not_supported_msg()
 
-        return Grades(self.grades_file, self.rubric, submitter, self.grading_policy)
+        return Grades(self.grades_file, self.rubric, submitter, self.grading_policies)
 
     def get_grading_status(
         self, rubric_code: str, submitter: str | None = None, ta: str | None = None
@@ -230,15 +235,17 @@ class BaseHWSetup(HWSetup):
 
 
 class BaseHWTester(HWTester):
-    def check_late_submission(self):
+    def get_grading_policy_data(self):
         """Grabs the latest commit timestamp to compare against the deadline"""
         proc = u.cmd_popen("git log -n 1 --format='%aI'")
         iso_timestamp, _ = proc.communicate()
 
-        return subs.check_late(
-            os.path.join(self.manager.workspace_dir, "deadline.txt"),
-            iso_timestamp.strip("\n"),
-        )
+        return {
+            "LatePercentagePenaltyPolicy": subs.check_late(
+                os.path.join(self.manager.workspace_dir, "deadline.txt"),
+                iso_timestamp.strip("\n"),
+            )
+        }
 
 
 def directory(start_dir: str) -> callable:
