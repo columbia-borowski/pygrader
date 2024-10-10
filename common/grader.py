@@ -39,7 +39,10 @@ class Grader:
         key = self.rubric_code
         p.print_intro(self.hw_tester.submitter, self.hw_name, key)
 
-        self.grades.enforce_grading_policy(self.hw_tester)
+        if not self.grades.are_grading_policies_applied():
+            self.grades.save_grading_policies_data(
+                self.hw_tester.get_grading_policy_data()
+            )
 
         if key == "ALL":
             self._grade_all()
@@ -143,7 +146,7 @@ class Grader:
                 self._print_subitem_grade(code, warn=True)
 
     def _prompt_grade(
-        self, rubric_item: RubricItem, autogrades: [list[tuple[str, str]]] | None = None
+        self, rubric_item: RubricItem, autogrades: list[tuple[str, str]] | None = None
     ):
         """Prompts the TA for pts/comments"""
 

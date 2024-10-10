@@ -6,14 +6,13 @@ import json
 import os
 import statistics
 import sys
-from typing import TYPE_CHECKING, TypeAlias
+from collections.abc import Iterable
+from typing import Any, TypeAlias
 
 from common import utils
 from common.grading_policies import GradingPolicy
 from common.rubric import Rubric
 
-if TYPE_CHECKING:
-    from common.hw_base import HWTester
 
 # Probably better to just look at a grades.json
 GradesDictType: TypeAlias = dict[str, dict[str, list[dict[str, dict[str, bool | str]]]]]
@@ -27,7 +26,7 @@ class Grades:
         rubric: the rubric object for a given hw
         submitter: The uni/team we're currently grading
         _grades: Maps submitter -> (is_late, (item -> (pts, comments)))
-        grading_policy: Class which control grading adjustments for submissions
+        grading_policies: Classes which control grading adjustments for submissions
     """
 
     def __init__(
@@ -35,13 +34,13 @@ class Grades:
         grades_file: str,
         rubric: Rubric,
         name: str,
-        grading_policy: GradingPolicy,
+        grading_policies: Iterable[GradingPolicy],
     ):
         self.grades_file = os.path.abspath(grades_file)
         self.rubric = rubric
         self.submitter = name
         self._grades = self._load_grades()
-        self.grading_policy = grading_policy
+        self.grading_policies = grading_policies
 
         if self.submitter and self.submitter not in self._grades:
             # This is the first time grading the submission
@@ -119,12 +118,12 @@ class Grades:
 
         return self._grades[name]["scores"][code]["award"] is not None
 
-    def enforce_grading_policy(self, hw_tester: HWTester):
-        if "grading_policy" not in self._grades[self.submitter]:
-            self._grades[self.submitter][
-                "grading_policy"
-            ] = self.grading_policy.enforce_policy(hw_tester)
-            self.synchronize()
+    def are_grading_policies_applied(self) -> bool:
+        return "grading_policies" in self._grades[self.submitter]
+
+    def save_grading_policies_data(self, grading_policies_data: dict[str, Any]):
+        self._grades[self.submitter]["grading_policies"] = grading_policies_data
+        self.synchronize()
 
     def dump(self, rubric_code: str):
         student_list = self._grades if not self.submitter else [self.submitter]
@@ -246,12 +245,20 @@ class Grades:
         # also want to apply grading policies (they're about to finalize
         # grades). Otherwise, we just just dump raw grades for reference.
         if rubric_code == "ALL":
-            total_pts, all_comments = self.grading_policy.get_points_and_comments(
-                total_pts, all_comments, self._grades[name]["grading_policy"]
-            )
+            for grading_policy in self.grading_policies:
+                total_pts, all_comments = grading_policy.get_points_and_comments(
+                    total_pts,
+                    all_comments,
+                    self._grades[name]["grading_policies"][
+                        self._get_grading_policy_key(grading_policy)
+                    ],
+                )
 
         concatted_comments = "; ".join(all_comments)
 
         total_pts = max(total_pts, 0)
 
         return True, total_pts, f"{name}\t{total_pts}\t{concatted_comments}"
+
+    def _get_grading_policy_key(self, grading_policy: GradingPolicy) -> str:
+        return type(grading_policy).__name__
