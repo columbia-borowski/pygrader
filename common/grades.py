@@ -128,8 +128,11 @@ class Grades:
     def dump(self, rubric_code: str):
         student_list = self._grades if not self.submitter else [self.submitter]
         for name in student_list:
-            _, _, s = self._get_submission_grades(name, rubric_code)
-            print(s)
+            is_graded, total_pts, all_comments = self._get_submission_grades(
+                name, rubric_code
+            )
+            concatted_comments = "; ".join(all_comments)
+            print(f"{name}\t{total_pts if is_graded else 'n/a'}\t{concatted_comments}")
 
     def status(self, rubric_code: str) -> tuple[bool, int]:
         student_list = self._grades if not self.submitter else [self.submitter]
@@ -195,7 +198,7 @@ class Grades:
                     self.is_graded(f"{item_code}.{si}", name)
                     for si, _ in enumerate(rubric_item.subitems, 1)
                 ):
-                    return False, total_pts, f"{name}\tn/a\tn/a"
+                    return False, total_pts, ["n/a"]
 
                 if rubric_item.deduct_from:
                     # If a deductive item, we increment total_pts upfront
@@ -254,11 +257,7 @@ class Grades:
                     ],
                 )
 
-        concatted_comments = "; ".join(all_comments)
-
-        total_pts = max(total_pts, 0)
-
-        return True, total_pts, f"{name}\t{total_pts}\t{concatted_comments}"
+        return True, max(total_pts, 0), all_comments
 
     def _get_grading_policy_key(self, grading_policy: GradingPolicy) -> str:
         return type(grading_policy).__name__
