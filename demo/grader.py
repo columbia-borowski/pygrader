@@ -26,7 +26,7 @@ class MANAGER(BaseHWManager):
     def __init__(self):
         super().__init__("demo", "rubric.json", TESTER)
 
-    def get_students(self, ta: str | None = None) -> list[str]:
+    def get_submitters(self, ta: str | None = None) -> list[str]:
         if ta:
             u.exit_with_not_supported_msg()
 

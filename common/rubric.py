@@ -16,9 +16,10 @@ class RubricItem:
     """Representation of a rubric item.
 
     Attributes:
-        code: The code of this item (e.g. B1)
-        subitems: List containing (pts, desc) for each subitem (e.g. B1.1, B1.2)
-        tester: Callback function to grade this item.
+        code (str): The code of this item (e.g. B1).
+        deduct_from (float): Points to deduct from the total score.
+        subitems (list[tuple[float, str]]): List containing (pts, desc) for each subitem (e.g. B1.1, B1.2).
+        depends_on (list[RubricItem]): List of other rubric items this item depends on.
     """
 
     code: str
@@ -27,6 +28,16 @@ class RubricItem:
     depends_on: list[RubricItem]
 
     def get_test(self, hw_tester: HWTester) -> callable:
+        """
+        Retrieves the test function for this rubric item.
+
+        Args:
+            hw_tester (HWTester): The homework tester instance.
+
+        Returns:
+            callable: The test function for this rubric item.
+        """
+
         def test_wrapper():
             test = getattr(hw_tester, "grade_" + self.code, hw_tester.default_grader)
             output = test()
@@ -39,11 +50,28 @@ class RubricItem:
         return test_wrapper
 
     def has_test_ran(self, hw_tester: HWTester) -> bool:
+        """
+        Checks if the test for this rubric item has already been run.
+
+        Args:
+            hw_tester (HWTester): The homework tester instance.
+
+        Returns:
+            bool: True if the test has been run, False otherwise.
+        """
         return self.code in hw_tester.ran_rubric_item_codes
 
 
 class Rubric:
+    """Class to create a rubric from a JSON file."""
+
     def __init__(self, rubric_file: str):
+        """
+        Initializes the Rubric.
+
+        Args:
+            rubric_file (str): The path to the JSON file containing the rubric.
+        """
         if not os.path.isfile(rubric_file):
             raise Exception("Rubric file not found.")
 
@@ -61,7 +89,16 @@ class Rubric:
             for item in table_v:
                 self._rubric[table_k][item] = self._create_rubric_item(table_v[item])
 
-    def _create_rubric_item(self, item_dict: dict):
+    def _create_rubric_item(self, item_dict: dict) -> RubricItem:
+        """
+        Creates a RubricItem from a dictionary.
+
+        Args:
+            item_dict (dict): The dictionary containing the rubric item data.
+
+        Returns:
+            RubricItem: The created RubricItem.
+        """
         return RubricItem(
             item_dict["name"],
             item_dict.get("deducting_from", None),
@@ -74,7 +111,18 @@ class Rubric:
             self._create_dependancies_list(item_dict.get("depends_on", [])),
         )
 
-    def _create_dependancies_list(self, depends_on_codes: list[str]):
+    def _create_dependancies_list(
+        self, depends_on_codes: list[str]
+    ) -> list[RubricItem]:
+        """
+        Creates a list of dependencies for a rubric item.
+
+        Args:
+            depends_on_codes (list[str]): The list of dependency codes.
+
+        Returns:
+            list[RubricItem]: The list of dependent RubricItems.
+        """
         depends_on = []
         for key in depends_on_codes:
             if key == "ALL":
@@ -97,14 +145,40 @@ class Rubric:
         return depends_on
 
     def keys(self):
+        """
+        Returns the keys of the rubric.
+
+        Returns:
+            dict_keys: The keys of the rubric.
+        """
         return self._rubric.keys()
 
     def values(self):
+        """
+        Returns the values of the rubric.
+
+        Returns:
+            dict_values: The values of the rubric.
+        """
         return self._rubric.values()
 
     def items(self):
+        """
+        Returns the items of the rubric.
+
+        Returns:
+            dict_items: The items of the rubric.
+        """
         return self._rubric.items()
 
     def __getitem__(self, table_k) -> dict[str, RubricItem]:
-        """Wrapper around self._rubric for convenience"""
+        """
+        Retrieves a table of rubric items by key.
+
+        Args:
+            table_k (str): The key of the table to retrieve.
+
+        Returns:
+            dict[str, RubricItem]: The table of rubric items.
+        """
         return self._rubric[table_k]

@@ -121,7 +121,7 @@ def print_stats(stats):
     if stats["is_non_zero"]:
         print_magenta("Computed using nonzero scores.")
 
-    print(f'Student count: {stats["count"]}')
+    print(f'Submission count: {stats["count"]}')
     print(f'Average grade: {stats["avg"]:.2f}')
     print(f'Median grade: {stats["median"]:.2f}')
     print(f'Standard dev: {stats["std_dev"]:.2f}')

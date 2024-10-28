@@ -16,15 +16,23 @@ if TYPE_CHECKING:
 
 class Grader:
     """Represents the current hw grader
+
     Attributes:
-        env: Arguments and Flags determining grader behavior (see main routine for argsparse)
-        hw_tester: The HWTester object representing this homework (rubric, testers)
-        grades: Maps (uni/team) -> (rubric item -> (pts, comments))
-        rubric_code: Rubric code being graded (based on AP/OS-style rubrics)
-            This can be a table (A), or an item (A1).
+        env (dict[str, bool | str]): Arguments and Flags determining grader behavior (see main routine for argsparse)
+        hw_tester (HWTester): The HWTester object representing this homework (rubric, testers)
+        grades (Grades): Maps (uni/team) -> (rubric item -> (pts, comments))
+        rubric_code (str): Rubric code being graded (based on AP/OS-style rubrics). This can be a table (A), or an item (A1).
     """
 
     def __init__(self, env: dict[str, bool | str], hw_tester: HWTester, grades: Grades):
+        """
+        Initializes the Grader.
+
+        Args:
+            env (dict[str, bool | str]): Arguments and Flags determining grader behavior.
+            hw_tester (HWTester): The HWTester object representing this homework.
+            grades (Grades): The grades object mapping (uni/team) to (rubric item -> (pts, comments)).
+        """
         self.env = env
         self.hw_tester = hw_tester
         self.grades = grades
@@ -36,6 +44,12 @@ class Grader:
         signal.signal(signal.SIGINT, self.hw_tester.exit_handler)
 
     def grade(self):
+        """
+        Grades the homework based on the rubric code.
+
+        This method handles the grading process, including printing intros, checking grading policies,
+        and grading all items or specific items based on the rubric code.
+        """
         key = self.rubric_code
         p.print_intro(self.hw_tester.submitter, self.hw_name, key)
 
@@ -64,31 +78,60 @@ class Grader:
         self.grades.dump(key)
 
     def _check_valid_table(self, table_key: str):
-        """Given a key (i.e A, C, N) check if its a valid rubric item"""
+        """
+        Checks if the given table key is valid.
+
+        Args:
+            table_key (str): The table key to check.
+
+        Raises:
+            ValueError: If the table key is not valid.
+        """
         keys = [*self.hw_tester.manager.rubric.keys()]
         if table_key not in keys:
             raise ValueError(f"{self.hw_name} does not have table {table_key}")
 
     def _check_valid_item(self, item_key: str):
-        """Given a table item (i.e. A1, B2, D9) check if it is valid.
-        Assumes the table is valid (use _check_valid_table() for validation on
-        that).
+        """
+        Checks if the given item key is valid.
+
+        Args:
+            item_key (str): The item key to check.
+
+        Raises:
+            ValueError: If the item key is not valid.
         """
         keys = [*self.hw_tester.manager.rubric[item_key[0]].keys()]
         if item_key not in keys:
-            raise ValueError(f"{self.hw_name} does not have " f"rubric item {item_key}")
+            raise ValueError(f"{self.hw_name} does not have rubric item {item_key}")
 
     def _grade_all(self):
+        """
+        Grades all tables in the rubric.
+        """
         for table in self.hw_tester.manager.rubric.keys():
             self._grade_table(table)
 
     def _grade_table(self, table_key: str):
+        """
+        Grades all items in the specified table.
+
+        Args:
+            table_key (str): The table key to grade.
+        """
         table = self.hw_tester.manager.rubric[table_key]
 
         for item in table:
             self._grade_item(table[item])
 
     def _grade_item(self, rubric_item: RubricItem, skip_if_graded: bool = True):
+        """
+        Grades a single rubric item.
+
+        Args:
+            rubric_item (RubricItem): The rubric item to grade.
+            skip_if_graded (bool, optional): Whether to skip if already graded. Defaults to True.
+        """
         if (
             not self.env["test_only"]
             and not self.env["regrade"]
@@ -148,8 +191,13 @@ class Grader:
     def _prompt_grade(
         self, rubric_item: RubricItem, autogrades: list[tuple[str, str]] | None = None
     ):
-        """Prompts the TA for pts/comments"""
+        """
+        Prompts the TA for points and comments for each subitem in the rubric item.
 
+        Args:
+            rubric_item (RubricItem): The rubric item to grade.
+            autogrades (list[tuple[str, str]] | None, optional): The autogrades for the rubric item. Defaults to None.
+        """
         if autogrades:
             # if grade function returns True, assume everything is awarded
             if autogrades is True:
@@ -197,12 +245,25 @@ class Grader:
         self.grades.synchronize()
 
     def _print_headerline(self, rubric_item: RubricItem):
+        """
+        Prints the header line for the rubric item.
+
+        Args:
+            rubric_item (RubricItem): The rubric item to print the header for.
+        """
         header = f"Grading {rubric_item.code}"
         if rubric_item.deduct_from:
             header += " ({rubric_item.deduct_from}p, deductive)"
         p.print_green(header)
 
     def _print_subitem_grade(self, code: str, warn: bool = False):
+        """
+        Prints the grade for a subitem.
+
+        Args:
+            code (str): The code of the subitem.
+            warn (bool, optional): Whether to print a warning if the subitem hasn't been graded. Defaults to False.
+        """
         if self.grades.is_graded(code):
             # Let's show the current grade.
             awarded = self.grades[code]["award"]

@@ -248,9 +248,9 @@ def grep_includes(fname: str, pattern: str) -> {}:
             line = line[0 : len(line) - 1 :]
             if re.search(pattern, line):
                 # https://www.geeksforgeeks.org/pattern-matching-python-reg ex/
-                guard = re.search("(?<=#include\s<).*(?=>)", line)
+                guard = re.search(r"(?<=#include\s<).*(?=>)", line)
                 if not guard:
-                    guard = re.search('(?<=#include\s").*(?=")', line)
+                    guard = re.search(r'(?<=#include\s").*(?=")', line)
 
                 if guard:
                     guard = guard.group()

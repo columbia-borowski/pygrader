@@ -17,7 +17,12 @@ from common.command_modules import (
 
 
 def load_and_run_pygrader(custom_modules: Iterable[CommandModule] | None = None):
-    """Load and run the pygrader framework with the provided custom modules."""
+    """
+    Load and run the pygrader framework with the provided custom modules.
+
+    Args:
+        custom_modules (Iterable[CommandModule] | None, optional): Custom command modules to include. Defaults to None.
+    """
     modules = [
         GradeModule(),
         DumpGradesModule(),
@@ -32,6 +37,13 @@ def load_and_run_pygrader(custom_modules: Iterable[CommandModule] | None = None)
 
 
 def load_and_run_modules(modules: Iterable[CommandModule], **kwargs):
+    """
+    Load and run the specified command modules.
+
+    Args:
+        modules (Iterable[CommandModule]): The command modules to load and run.
+        **kwargs: Additional keyword arguments to pass to the ArgumentParser.
+    """
     main_module = CompositeCommandModule("main", "command", modules)
 
     parser = ArgumentParser(**kwargs)

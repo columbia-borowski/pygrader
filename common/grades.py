@@ -36,6 +36,15 @@ class Grades:
         name: str,
         grading_policies: Iterable[GradingPolicy],
     ):
+        """
+        Initializes the Grades object.
+
+        Args:
+            grades_file (str): The path to the JSON file with grades.
+            rubric (Rubric): The rubric object for a given homework.
+            name (str): The name of the submitter (uni/team).
+            grading_policies (Iterable[GradingPolicy]): The grading policies to apply.
+        """
         self.grades_file = os.path.abspath(grades_file)
         self.rubric = rubric
         self.submitter = name
@@ -74,6 +83,12 @@ class Grades:
         return grades
 
     def _get_defined_rubric_subitems(self) -> set[str]:
+        """
+        Returns a set of all defined rubric subitems.
+
+        Returns:
+            set[str]: A set of all defined rubric subitems.
+        """
         subitems = set()
         for table_code in sorted(self.rubric.keys()):
             for item_code in sorted(self.rubric[table_code].keys()):
@@ -119,27 +134,33 @@ class Grades:
         return self._grades[name]["scores"][code]["award"] is not None
 
     def are_grading_policies_applied(self) -> bool:
+        """Checks if grading policies have been applied"""
         return "grading_policies" in self._grades[self.submitter]
 
     def save_grading_policies_data(self, grading_policies_data: dict[str, Any]):
+        """Saves grading policies data and synchronizes the grades file"""
         self._grades[self.submitter]["grading_policies"] = grading_policies_data
         self.synchronize()
 
     def dump(self, rubric_code: str):
-        student_list = self._grades if not self.submitter else [self.submitter]
-        for name in student_list:
+        """Dumps the grades for the specified rubric code"""
+        submitters = self._grades if not self.submitter else [self.submitter]
+        for submitter in submitters:
             is_graded, total_pts, all_comments = self._get_submission_grades(
-                name, rubric_code
+                submitter, rubric_code
             )
             concatted_comments = "; ".join(all_comments)
-            print(f"{name}\t{total_pts if is_graded else 'n/a'}\t{concatted_comments}")
+            print(
+                f"{submitter}\t{total_pts if is_graded else 'n/a'}\t{concatted_comments}"
+            )
 
     def status(self, rubric_code: str) -> tuple[bool, int]:
-        student_list = self._grades if not self.submitter else [self.submitter]
+        """Returns the grading status for the specified rubric code"""
+        submitters = self._grades if not self.submitter else [self.submitter]
         all_graded = True
         graded_count = 0
-        for name in student_list:
-            is_graded, _, _ = self._get_submission_grades(name, rubric_code)
+        for submitter in submitters:
+            is_graded, _, _ = self._get_submission_grades(submitter, rubric_code)
             if is_graded:
                 graded_count += 1
             elif all_graded:
@@ -148,12 +169,13 @@ class Grades:
         return all_graded, graded_count
 
     def stats(self, rubric_code: str = "ALL", non_zero: bool = True):
+        """Returns statistics for the grades"""
         if self.submitter:
             raise ValueError("Cannot return stats for a single submission")
 
         grades_list = []
-        for uni in self._grades:
-            is_graded, pts, _ = self._get_submission_grades(uni, rubric_code)
+        for submitter in self._grades:
+            is_graded, pts, _ = self._get_submission_grades(submitter, rubric_code)
             if is_graded and (not non_zero or pts > 0):
                 grades_list.append(pts)
 
@@ -177,7 +199,7 @@ class Grades:
             should be zero.
 
             NOTE: We only apply the late penalty if the TA requested ALL grades
-            (such that rubric_code = 'ALL'.
+            (such that rubric_code = 'ALL').
         """
         if not name:
             name = self.submitter
@@ -198,7 +220,7 @@ class Grades:
                     self.is_graded(f"{item_code}.{si}", name)
                     for si, _ in enumerate(rubric_item.subitems, 1)
                 ):
-                    return False, total_pts, ["n/a"]
+                    return False, 0, ["n/a"]
 
                 if rubric_item.deduct_from:
                     # If a deductive item, we increment total_pts upfront
@@ -252,12 +274,13 @@ class Grades:
                 total_pts, all_comments = grading_policy.get_points_and_comments(
                     total_pts,
                     all_comments,
-                    self._grades[name]["grading_policies"][
-                        self._get_grading_policy_key(grading_policy)
-                    ],
+                    self._grades[name]["grading_policies"].get(
+                        self._get_grading_policy_key(grading_policy), None
+                    ),
                 )
 
         return True, max(total_pts, 0), all_comments
 
     def _get_grading_policy_key(self, grading_policy: GradingPolicy) -> str:
+        """Returns the key for the grading policy"""
         return type(grading_policy).__name__

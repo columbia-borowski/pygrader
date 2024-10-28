@@ -27,8 +27,8 @@ class MANAGER(BaseHWManager):
         except ValueError:
             sys.exit("Please run hw_setup before grading")
 
-    def get_students(ta: str | None = None) -> list[str]:
-        # TODO return an array of students to grade
+    def get_submitters(ta: str | None = None) -> list[str]:
+        # TODO return a list of submitters to grade
         return []
 
 
