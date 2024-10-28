@@ -22,7 +22,25 @@ from common.rubric import Rubric
 
 
 class HWManager(ABC):
+    """Abstract base class for homework managers.
+
+    Attributes:
+        hw_name (str): The name of the homework.
+        hw_tester_class (type[HWTester]): The class of the homework tester.
+        scripts_dir (str): The directory containing the scripts for the homework.
+        rubric (Rubric): The rubric for the homework.
+        workspace_dir (str | None): The workspace directory for the homework.
+    """
+
     def __init__(self, hw_name: str, rubric_name: str, hw_tester_class: type[HWTester]):
+        """
+        Initializes the HWManager.
+
+        Args:
+            hw_name (str): The name of the homework.
+            rubric_name (str): The name of the rubric file.
+            hw_tester_class (type[HWTester]): The class of the homework tester.
+        """
         self.hw_name = hw_name
         self.hw_tester_class = hw_tester_class
 
@@ -38,37 +56,104 @@ class HWManager(ABC):
     def get_submission_grader(
         self, env: dict[str, bool | str], submitter: str | None
     ) -> Grader:
-        pass
+        """
+        Retrieves the grader for the specified submission.
+
+        Args:
+            env (dict[str, bool | str]): The environment variables.
+            submitter (str | None): The name of the submitter.
+
+        Returns:
+            Grader: The grader for the specified submission.
+        """
 
     @abstractmethod
     def get_grading_status(
         self, rubric_code: str, submitter: str | None = None, ta: str | None = None
     ) -> bool:
-        pass
+        """
+        Retrieves the grading status for the specified rubric code.
+
+        Args:
+            rubric_code (str): The rubric code.
+            submitter (str | None, optional): The name of the submitter. Defaults to None.
+            ta (str | None, optional): The name of the TA. Defaults to None.
+
+        Returns:
+            bool: True if the grading is complete, False otherwise.
+        """
 
     @abstractmethod
     def get_grades(self, submitter: str | None = None, ta: str | None = None) -> Grades:
-        pass
+        """
+        Retrieves the grades for the specified submitter or TA.
 
-    def get_hw_tester(self, submitter) -> HWTester:
+        Args:
+            submitter (str | None, optional): The name of the submitter. Defaults to None.
+            ta (str | None, optional): The name of the TA. Defaults to None.
+
+        Returns:
+            Grades: The grades for the specified submitter or TA.
+        """
+
+    def get_hw_tester(self, submitter: str) -> HWTester:
+        """
+        Retrieves the homework tester for the specified submitter.
+
+        Args:
+            submitter (str): The name of the submitter.
+
+        Returns:
+            HWTester: The homework tester for the specified submitter.
+        """
         return self.hw_tester_class(submitter, self)
 
     @abstractmethod
-    def get_students(self, ta: str | None = None) -> list[str]:
-        pass
+    def get_submitters(self, ta: str | None = None) -> list[str]:
+        """
+        Retrieves the list of submitters for the specified TA.
+
+        Args:
+            ta (str | None, optional): The name of the TA. Defaults to None.
+
+        Returns:
+            list[str]: The list of submitters.
+        """
 
 
 class HWSetup(CommandModule):
-    """alias for command module"""
+    """Alias for command module for homework setup."""
 
     def __init__(self):
+        """
+        Initializes the HWSetup.
+        """
         super().__init__("hw_setup")
 
 
 class HWTester:
+    """Base class for homework testers.
+
+    Attributes:
+        submitter (str): The name of the submitter.
+        manager (HWManager): The homework manager.
+        grader (Grader | None): The grader.
+        submission_dir (str | None): The directory containing the submission.
+        ran_rubric_item_codes (set): The set of rubric item codes that have been run.
+        ran_rubric_tests (set): The set of rubric tests that have been run.
+    """
+
     def __init__(
         self, submitter: str, manager: HWManager, grader: Grader | None = None
     ):
+        """
+        Initializes the HWTester.
+
+        Args:
+            submitter (str): The name of the submitter.
+            manager (HWManager): The homework manager.
+            grader (Grader | None, optional): The grader. Defaults to None.
+        """
         self.submitter = submitter
         self.manager = manager
         self.grader = grader
@@ -80,30 +165,34 @@ class HWTester:
 
     @abstractmethod
     def get_grading_policy_data(self) -> dict[str, Any]:
-        pass
+        """
+        Retrieves the grading policy data.
+
+        Returns:
+            dict[str, Any]: The grading policy data.
+        """
 
     def do_cd(self, path):
-        """Changes directory relative to the self.submission_dir.
+        """
+        Changes directory relative to the self.submission_dir.
 
-        For example, if you had the following:
-            hw3  <---- self.submission_dir
-            \_ part1
-               \_ part1-sub
-
-        and you wanted to cd into part1-sub, you would run
-        `do_cd(os.path.join('part1', 'part1-sub'))`.
+        Args:
+            path (str): The path to change to.
         """
         part_dir = os.path.join(self.submission_dir, path)
         u.is_dir(part_dir)
         os.chdir(part_dir)
 
     def default_grader(self):
-        """Generic grade function."""
+        """
+        Generic grade function.
+        """
         p.print_red("[ Opening shell, ^D/exit when done. ]")
         os.system("bash")
 
     def exit_handler(self, _signal, _frame):
-        """Handler for SIGINT
+        """
+        Handler for SIGINT.
 
         Note: this serves as a template for how the subclasses should do it.
         The subclass is free to override this function with more hw-specific
@@ -114,16 +203,28 @@ class HWTester:
         sys.exit()
 
     def cleanup(self):
-        """Performs cleanup (kills stray processes, removes mods, etc.)."""
+        """
+        Performs cleanup (kills stray processes, removes mods, etc.).
+        """
 
 
 class BaseHWManager(HWManager):
+    """Base class for homework managers."""
+
     def __init__(
         self,
         hw_name: str,
         rubric_name: str,
         hw_tester_class: type[BaseHWTester],
     ):
+        """
+        Initializes the BaseHWManager.
+
+        Args:
+            hw_name (str): The name of the homework.
+            rubric_name (str): The name of the rubric file.
+            hw_tester_class (type[BaseHWTester]): The class of the homework tester.
+        """
         super().__init__(hw_name, rubric_name, hw_tester_class)
 
         self.workspace_dir = os.path.join(
@@ -136,11 +237,31 @@ class BaseHWManager(HWManager):
     def get_submission_grader(
         self, env: dict[str, bool | str], submitter: str | None
     ) -> Grader:
+        """
+        Retrieves the grader for the specified submission.
+
+        Args:
+            env (dict[str, bool | str]): The environment variables.
+            submitter (str | None): The name of the submitter.
+
+        Returns:
+            Grader: The grader for the specified submission.
+        """
         hw_tester = self.get_hw_tester(submitter)
         grades = self.get_grades(submitter)
         return Grader(env, hw_tester, grades)
 
     def get_grades(self, submitter: str | None = None, ta: str | None = None) -> Grades:
+        """
+        Retrieves the grades for the specified submitter or TA.
+
+        Args:
+            submitter (str | None, optional): The name of the submitter. Defaults to None.
+            ta (str | None, optional): The name of the TA. Defaults to None.
+
+        Returns:
+            Grades: The grades for the specified submitter or TA.
+        """
         if ta:
             u.exit_with_not_supported_msg()
 
@@ -149,6 +270,17 @@ class BaseHWManager(HWManager):
     def get_grading_status(
         self, rubric_code: str, submitter: str | None = None, ta: str | None = None
     ) -> bool:
+        """
+        Retrieves the grading status for the specified rubric code.
+
+        Args:
+            rubric_code (str): The rubric code.
+            submitter (str | None, optional): The name of the submitter. Defaults to None.
+            ta (str | None, optional): The name of the TA. Defaults to None.
+
+        Returns:
+            bool: True if the grading is complete, False otherwise.
+        """
         if ta:
             u.exit_with_not_supported_msg()
 
@@ -156,16 +288,33 @@ class BaseHWManager(HWManager):
         graded, _ = grades.status(rubric_code)
         return graded
 
-    def get_students(self, _: str | None = None) -> list[str]:
+    def get_submitters(self, _: str | None = None) -> list[str]:
+        """
+        Retrieves the list of submitters.
+
+        Returns:
+            list[str]: The list of submitters.
+        """
         return []
 
 
 class BaseHWSetup(HWSetup):
+    """Base class for homework setup."""
+
     def __init__(self):
+        """
+        Initializes the BaseHWSetup.
+        """
         super().__init__()
         self.DEADLINE = None
 
     def extend_parser(self, parser: ArgumentParser):
+        """
+        Extends the argument parser with additional arguments.
+
+        Args:
+            parser (ArgumentParser): The argument parser to extend.
+        """
         parser.add_argument(
             "...",
             type=str,
@@ -174,6 +323,12 @@ class BaseHWSetup(HWSetup):
         )
 
     def run(self, parsed: Namespace):
+        """
+        Executes the setup command based on parsed arguments.
+
+        Args:
+            parsed (Namespace): The parsed arguments.
+        """
         run_dir = os.getcwd()
         tas = []
 
@@ -214,7 +369,9 @@ class BaseHWSetup(HWSetup):
             self._record_deadline()
 
     def _record_deadline(self):
-        """Reads in a deadline and stores it"""
+        """
+        Reads in a deadline and stores it.
+        """
         if os.path.exists("deadline.txt"):
             return
         if not self.DEADLINE:
@@ -235,21 +392,28 @@ class BaseHWSetup(HWSetup):
 
 
 class BaseHWTester(HWTester):
+    """Base class for homework testers."""
+
     def get_grading_policy_data(self):
-        """Grabs the latest commit timestamp to compare against the deadline"""
+        """
+        Grabs the latest commit timestamp to compare against the deadline.
+
+        Returns:
+            dict[str, Any]: The grading policy data.
+        """
         proc = u.cmd_popen("git log -n 1 --format='%aI'")
         iso_timestamp, _ = proc.communicate()
 
-        return {
-            "LatePercentagePenaltyPolicy": subs.check_late(
-                os.path.join(self.manager.workspace_dir, "deadline.txt"),
-                iso_timestamp.strip("\n"),
-            )
-        }
+        is_late = subs.check_late(
+            os.path.join(self.manager.workspace_dir, "deadline.txt"),
+            iso_timestamp.strip("\n"),
+        )
+        return {"LatePercentagePenaltyPolicy": 0.2 if is_late else 0}
 
 
 def directory(start_dir: str) -> callable:
-    """Decorator function that cd's into `start_dir` before the test.
+    """
+    Decorator function that cd's into `start_dir` before the test.
 
     If start_dir is 'root', we cd into the root of the submission_dir.
     For example:
@@ -257,6 +421,12 @@ def directory(start_dir: str) -> callable:
         def test_B1(self):
             ...
     This will cd into submission_dir/part1 before calling test_B1().
+
+    Args:
+        start_dir (str): The directory to change to.
+
+    Returns:
+        callable: The decorator function.
     """
 
     # This is definitely overkill, but for ultimate correctness (and
