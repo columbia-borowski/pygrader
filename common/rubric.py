@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from common import printing as p
+
 if TYPE_CHECKING:
+    from common.grades import Grades
     from common.hw_base import HWTester
 
 
@@ -19,26 +23,43 @@ class RubricItem:
         code (str): The code of this item (e.g. B1).
         deduct_from (float): Points to deduct from the total score.
         subitems (list[tuple[float, str]]): List containing (pts, desc) for each subitem (e.g. B1.1, B1.2).
-        depends_on (list[RubricItem]): List of other rubric items this item depends on.
+        depends_on (dict[str, list[RubricItem]]): Dictionary containing the dependencies for this item.
     """
 
     code: str
     deduct_from: float
     subitems: list[tuple[float, str]]
-    depends_on: list[RubricItem]
+    depends_on: dict[str, list[RubricItem]]
 
-    def get_test(self, hw_tester: HWTester) -> callable:
+    def get_test(self, hw_tester: HWTester, grades: Grades) -> Callable:
         """
         Retrieves the test function for this rubric item.
 
         Args:
             hw_tester (HWTester): The homework tester instance.
+            grades (Grades): The grades instance.
 
         Returns:
             callable: The test function for this rubric item.
         """
 
         def test_wrapper():
+            ungraded_dependencies = []
+            for rubric_item in self.depends_on["is_graded"]:
+                for i in range(1, len(rubric_item.subitems) + 1):
+                    if not grades.is_graded(f"{rubric_item.code}.{i}"):
+                        ungraded_dependencies.append(rubric_item)
+                        break
+
+            if ungraded_dependencies:
+                codes = ", ".join(
+                    rubric_item.code for rubric_item in ungraded_dependencies
+                )
+                p.print_yellow(
+                    f"[ You shouldn't grade {self.code} because you haven't graded {codes}. Please be careful. ]"
+                )
+                return None
+
             test = getattr(hw_tester, "grade_" + self.code, hw_tester.default_grader)
             output = test()
 
@@ -99,6 +120,7 @@ class Rubric:
         Returns:
             RubricItem: The created RubricItem.
         """
+        depends_on = item_dict.get("depends_on", {})
         return RubricItem(
             item_dict["name"],
             item_dict.get("deducting_from", None),
@@ -108,10 +130,17 @@ class Rubric:
                     item_dict["desc_per_subitem"],
                 )
             ),
-            self._create_dependancies_list(item_dict.get("depends_on", [])),
+            {
+                "has_ran": self._create_dependencies_list(
+                    depends_on.get("has_ran", [])
+                ),
+                "is_graded": self._create_dependencies_list(
+                    depends_on.get("is_graded", [])
+                ),
+            },
         )
 
-    def _create_dependancies_list(
+    def _create_dependencies_list(
         self, depends_on_codes: list[str]
     ) -> list[RubricItem]:
         """
