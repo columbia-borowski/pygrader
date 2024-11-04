@@ -149,7 +149,7 @@ class Grader:
         if not self.env["grade_only"]:
             dependancies = [
                 dep_ri
-                for dep_ri in rubric_item.depends_on
+                for dep_ri in rubric_item.depends_on["has_ran"]
                 if not dep_ri.has_test_ran(self.hw_tester)
             ]
             if dependancies:
@@ -166,7 +166,7 @@ class Grader:
                     p.print_magenta(f"{rubric_item.code}.{i} ({pts}p): {desc}")
                 p.print_double()
 
-                test = rubric_item.get_test(self.hw_tester)
+                test = rubric_item.get_test(self.hw_tester, self.grades)
                 autogrades = test()
                 return autogrades
 
