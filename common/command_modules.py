@@ -167,6 +167,13 @@ class GradeModule(CommandWithHWDetailsModule):
 
         command_group = parser.add_mutually_exclusive_group()
         command_group.add_argument(
+            "-a",
+            "--autograde-only",
+            action="store_true",
+            help="grade only those items that can be autograded",
+            dest="autograde_only",
+        )
+        command_group.add_argument(
             "-g",
             "--grade-only",
             action="store_true",
