@@ -171,7 +171,10 @@ class Grader:
                 return autogrades
 
             try:
-                u.run_and_prompt(test_wrapper)
+                if not self.env["autograde_only"]:
+                    u.run_and_prompt(test_wrapper)
+                else:
+                    test_wrapper()
             except Exception as e:
                 p.print_red(f"\n\n[ Exception: {e} ]")
         else:
@@ -214,7 +217,7 @@ class Grader:
                     self.grades[subitem_code]["award"] = a == "y"
                     self.grades[subitem_code]["comments"] = c
 
-        else:
+        elif not self.env["autograde_only"]:
             for i, (pts, desc) in enumerate(rubric_item.subitems, 1):
                 subitem_code = f"{rubric_item.code}.{i}"
                 p.print_magenta(f"{subitem_code} ({pts}p): {desc}")
