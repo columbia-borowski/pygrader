@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 
 from common import printing as p
 
@@ -40,7 +41,7 @@ def cmd_popen(cmd: str):
     )
 
 
-def cmd_communicate(process, exclude: [str]) -> (str, str):
+def cmd_communicate(process, exclude: list[str]) -> tuple[str, str]:
     out, err = process.communicate()
     out = "".join(ch for ch in out if ch not in set(exclude))
     err = "".join(ch for ch in err if ch not in set(exclude))
@@ -239,7 +240,7 @@ def inspect_string(
     print(bat.communicate(input=s)[0])
 
 
-def grep_includes(fname: str, pattern: str) -> {}:
+def grep_includes(fname: str, pattern: str) -> set[str]:
     # file_check = get_file(fname)
     # https://linuxhint.com/run-grep-python/
     found_set = set()
@@ -274,7 +275,7 @@ def inspect_file(fname: str, pattern: str | None = None, use_pager: bool = True)
 
 
 def inspect_directory(
-    files: list[str], pattern: str | None = None, banner_fn: callable = None
+    files: list[str], pattern: str | None = None, banner_fn: Callable = None
 ):
     """Prompt the user for which file to inspect with optional pattern.
 
@@ -403,76 +404,6 @@ def compare_values(
     return False
 
 
-def run_and_prompt(f: callable):
-    """Runs f and then prompts for rerun/shell/continue."""
-    while True:
-        out = f()
-        if out is True or isinstance(out, list):
-            break
-        p.print_line()
-        p.print_yellow("Run test again (a)")
-        p.print_yellow("Open shell & run again (s)")
-        p.print_yellow("Continue (enter)")
-
-        while True:
-            try:
-                usr_input = input(f"{p.CBLUE2}Enter an action [a|s]: {p.CEND}")
-                break
-            except EOFError as _:
-                print("^D")
-                continue
-
-        if usr_input == "a":
-            continue
-        if usr_input == "s":
-            p.print_red("^D/exit to end shell session")
-            os.system("bash")
-            continue
-        break
-
-
-def run_and_prompt_multi(
-    test_name_to_callable: dict[str, callable],
-    banner_fn: callable = None,
-    finish_msg: str | None = None,
-):
-    """Wraps run_and_prompt by offering multiple tests to run.
-
-    Args:
-        test_name_to_callable: Maps a test name to a function that executes that
-            test.
-        banner_fn: Optional function to execute before presenting choices
-            (used to print some sort of banner).
-        finish_msg: Optional message to print as the exit choice.
-    """
-    number_to_callable = dict(enumerate(test_name_to_callable.values()))
-    finish_msg = "Finish" if not finish_msg else finish_msg
-    while True:
-        if banner_fn:
-            banner_fn()
-        for i, test_name in enumerate(test_name_to_callable.keys()):
-            p.print_yellow(f"({i + 1}) {test_name}")
-        p.print_yellow(
-            f"({len(number_to_callable) + 1}) " f"{p.CVIOLET2}{finish_msg}{p.CEND}"
-        )
-        try:
-            choice = int(input(f"{p.CBLUE2}Choice: {p.CEND}"))
-        except (ValueError, EOFError):
-            continue
-
-        if 0 < choice <= len(number_to_callable):
-
-            def tester_wrapper():
-                p.print_line()
-                number_to_callable[choice - 1]()
-
-            run_and_prompt(tester_wrapper)
-        elif choice == len(number_to_callable) + 1:
-            break
-        else:
-            continue
-
-
 def prompt_continue(ptext: str = "[ Press enter to continue... ]"):
     input(f"{p.CCYAN}{ptext}{p.CEND}")
 
@@ -485,3 +416,14 @@ def tabs_to_spaces(text: str) -> str:
 def exit_with_not_supported_msg():
     p.print_red("[ Not Supported ]")
     sys.exit(1)
+
+
+def open_shell():
+    # (pygrader)user@host:pwd $
+    prompt = (
+        f"{p.CGREEN}({p.CYELLOW}pygrader{p.CGREEN}){p.CEND}"
+        f":{p.CBLUE}\\w{p.CCYAN} \\${p.CEND} "
+    )
+
+    p.print_red("[ ^D/exit when done ]")
+    os.system(f"PROMPT_COMMAND='PS1=\"{prompt}\"; unset PROMPT_COMMAND' " f"bash")

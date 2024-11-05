@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from common import printing as p
