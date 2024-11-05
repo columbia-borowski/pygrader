@@ -13,7 +13,6 @@ from common import utils
 from common.grading_policies import GradingPolicy
 from common.rubric import Rubric
 
-
 # Probably better to just look at a grades.json
 GradesDictType: TypeAlias = dict[str, dict[str, list[dict[str, dict[str, bool | str]]]]]
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import signal
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from common import printing as p
@@ -42,6 +43,9 @@ class Grader:
 
         self.hw_tester.grader = self
         signal.signal(signal.SIGINT, self.hw_tester.exit_handler)
+
+        self.next_item_flag = False
+        self.next_student_flag = False
 
     def grade(self):
         """
@@ -111,6 +115,8 @@ class Grader:
         """
         for table in self.hw_tester.manager.rubric.keys():
             self._grade_table(table)
+            if self.next_student_flag:
+                return
 
     def _grade_table(self, table_key: str):
         """
@@ -123,6 +129,8 @@ class Grader:
 
         for item in table:
             self._grade_item(table[item])
+            if self.next_student_flag:
+                return
 
     def _grade_item(self, rubric_item: RubricItem, skip_if_graded: bool = True):
         """
@@ -171,17 +179,18 @@ class Grader:
                 return autogrades
 
             try:
-                if not self.env["autograde_only"]:
-                    u.run_and_prompt(test_wrapper)
-                else:
-                    test_wrapper()
+                self._run_and_prompt(test_wrapper)
             except Exception as e:
                 p.print_red(f"\n\n[ Exception: {e} ]")
         else:
             self._print_headerline(rubric_item)
 
         # if -t is not provided, ask for grade. If -t is provided skip
-        if not self.env["test_only"]:
+        if (
+            not self.env["test_only"]
+            and not self.next_item_flag
+            and not self.next_student_flag
+        ):
             p.print_line()
 
             self._prompt_grade(rubric_item, autogrades)
@@ -190,6 +199,54 @@ class Grader:
             for i in range(1, len(rubric_item.subitems) + 1):
                 code = f"{rubric_item.code}.{i}"
                 self._print_subitem_grade(code, warn=True)
+
+        self.next_item_flag = False
+
+    def _run_and_prompt(self, f: Callable):
+        if self.env["autograde_only"]:
+            f()
+            return
+
+        valid_options = ["a", "s", "ni"]
+        if ns_available := not self.env["submitter"]:
+            valid_options.append("ns")
+
+        while True:
+            out = f()
+            if out is True or isinstance(out, list):
+                break
+
+            p.print_line()
+            p.print_yellow("Run test again (a)")
+            p.print_yellow("Open shell & run again (s)")
+            p.print_yellow("Move to next rubric item (ni)")
+            if ns_available:
+                p.print_yellow("Move to next submission (ns)")
+            p.print_yellow("Continue (enter)")
+
+            while True:
+                try:
+                    usr_input = input(
+                        f"{p.CBLUE2}Enter an action [{'|'.join(valid_options)}]: {p.CEND}"
+                    )
+                    if usr_input == "" or usr_input in valid_options:
+                        break
+                except EOFError as _:
+                    print("^D")
+                    continue
+
+            if usr_input == "a":
+                continue
+            if usr_input == "s":
+                u.open_shell()
+                continue
+
+            if ns_available and usr_input == "ns":
+                self.next_student_flag = True
+            if usr_input == "ni":
+                self.next_item_flag = True
+
+            break
 
     def _prompt_grade(
         self, rubric_item: RubricItem, autogrades: list[tuple[str, str]] | None = None
