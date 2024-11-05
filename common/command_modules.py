@@ -24,13 +24,13 @@ Classes:
 
 from __future__ import annotations
 
-import os
 import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from collections.abc import Iterable
 
 from common import printing as p
+from common import utils as u
 from common.assignments import get_assignment_manager
 
 
@@ -332,16 +332,7 @@ class InspectModule(CommandModule):
         """
         hw_manager = get_assignment_manager(parsed.hw)
         tester = hw_manager.get_hw_tester(parsed.submitter)
-
-        # (pygrader)user@host:pwd $
-        prompt = (
-            f"{p.CGREEN}({p.CYELLOW}pygrader{p.CGREEN}){p.CEND}"
-            f":{p.CBLUE}\\w{p.CCYAN} \\${p.CEND} "
-        )
-
-        p.print_red("[ ^D/exit when done ]")
-        os.system(f"PROMPT_COMMAND='PS1=\"{prompt}\"; unset PROMPT_COMMAND' " f"bash")
-
+        u.open_shell()
         tester.cleanup()
 
 
