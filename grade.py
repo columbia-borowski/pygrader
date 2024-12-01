@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """grade.py: Grading driver"""
 
-from common.loader import load_and_run_pygrader
+from borowski_common.driver import run_borowski_pygrader
 
 if __name__ == "__main__":
-    load_and_run_pygrader()
+    run_borowski_pygrader()
