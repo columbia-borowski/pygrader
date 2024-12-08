@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """borowski_common/canvas_modules.py: canvas modules"""
 
 import sys
@@ -14,7 +13,30 @@ from borowski_common.canvas import Canvas
 from borowski_common.constants import ACCOMMODATIONS_SHEET_ID
 from borowski_common.quizzes import QuizDownloader
 from common import printing as p
-from common.command_modules import CommandModule
+from common.assignments import get_assignment_manager
+from common.command_modules import CommandModule, CommandWithHWDetailsModule
+
+
+class UploadGradesModule(CommandWithHWDetailsModule):
+    """
+    A command module to upload grades.
+
+    Methods:
+        run(parsed: Namespace): Runs the upload grades command.
+    """
+
+    def __init__(self):
+        super().__init__("upload")
+
+    def run(self, parsed: Namespace):
+        """
+        Runs the upload grades command.
+
+        Args:
+            parsed (Namespace): The parsed command-line arguments.
+        """
+        hw_manager = get_assignment_manager(parsed.hw)
+        hw_manager.upload_grades(parsed.submitter, parsed.ta)
 
 
 class ClassRankModule(CommandModule):
@@ -337,7 +359,7 @@ class QuizRegradesModule(CommandModule):
     """
 
     def __init__(self):
-        super().__init__("quiz-regrades")
+        super().__init__("regrade-quiz")
 
     def extend_parser(self, parser: ArgumentParser):
         """
