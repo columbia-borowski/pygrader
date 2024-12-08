@@ -6,12 +6,9 @@ from collections.abc import Iterable
 
 from borowski_common.command_modules import (
     DeductionsModule,
-    EdGradesPostModule,
-    EdRegradeRequestModule,
     GetSubmissionInfoModule,
     PlagiarismModule,
     RunMossModule,
-    UploadGradesModule,
 )
 from common.command_modules import CommandModule
 from common.loader import load_and_run_pygrader
@@ -37,13 +34,10 @@ def run_borowski_pygrader(modules: Iterable[CommandModule] | None = None):
 
     load_and_run_pygrader(
         [
-            UploadGradesModule(),
             RunMossModule(),
             GetSubmissionInfoModule(),
             PlagiarismModule(),
             DeductionsModule(),
-            EdRegradeRequestModule(),
-            EdGradesPostModule(),
             *modules,
         ]
     )
