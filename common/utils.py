@@ -221,14 +221,18 @@ def grep_string(words: str, pattern: str, padding: int = 0) -> int:
 
 
 def inspect_string(
-    s: str, pattern: str | None = None, use_pager: bool = True, lang: str | None = None
+    s: str,
+    pattern: str | None = None,
+    use_pager: bool = True,
+    lang: str | None = None,
+    ignore_case: bool = False,
 ):
     if not lang:
         lang = "txt"
 
     bat_str = f"bat --color=always -l {lang}"
     grep_str = (
-        f"GREP_COLORS='ms=01;91;107' grep --color=always "
+        f"GREP_COLORS='ms=01;91;107' grep --color=always {'-i' if ignore_case else ''} "
         f"-E '^|{pattern}' {'| less -R' if use_pager else ''}"
     )
     if pattern:
@@ -259,12 +263,17 @@ def grep_includes(fname: str, pattern: str) -> set[str]:
     return found_set
 
 
-def inspect_file(fname: str, pattern: str | None = None, use_pager: bool = True):
+def inspect_file(
+    fname: str,
+    pattern: str | None = None,
+    use_pager: bool = True,
+    ignore_case: bool = False,
+):
     """Displays 'fname', w/ optional pattern highlighted, optionally in less"""
     name = get_file(fname)
     bat_str = f"bat --color=always {name}"
     grep_str = (
-        f"GREP_COLORS='ms=01;91;107' grep --color=always "
+        f"GREP_COLORS='ms=01;91;107' grep --color=always {'-i' if ignore_case else ''} "
         f"-E '^|{pattern}' {'| less -R' if use_pager else ''}"
     )
     if pattern:

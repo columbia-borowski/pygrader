@@ -290,20 +290,15 @@ class TestRunner(ABC):
             message = f"{stream} is incorrect"
             comments.append(message)
             p.print_red(f"[ {message} ]")
-
             u.diff(expected, received, f"Expected {stream}", f"Received {stream}")
-
             return False
 
-        message = f"{stream} is correct"
-        print_color_fn = p.print_green
         if not self.check_stream_exact_match(stream, expected, received):
             self.items_with_formatting_errors.append(subitem_code)
-            message += " but formatting is incorrect"
-            print_color_fn = p.print_yellow
-
-        print_color_fn(f"[ {message} ]")
-        u.diff(expected, received, f"Expected {stream}", f"Received {stream}")
+            p.print_yellow(f"{stream} is correct but formatting is incorrect")
+            u.diff(expected, received, f"Expected {stream}", f"Received {stream}")
+        else:
+            p.print_green(f"[ {stream} is correct ]")
 
         return True
 
