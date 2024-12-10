@@ -89,6 +89,7 @@ def diff(
     received_output: str | None = None,
     expected_label="Expected",
     received_label="Received",
+    use_pager=True,
 ):
     if not expected_output:
         expected_output = ""
@@ -102,7 +103,9 @@ def diff(
     with open(received_label, "w", encoding="utf-8") as received_file:
         received_file.write(received_output)
 
-    run_cmd(f"delta -s --hunk-header-style omit '{expected_label}' '{received_label}'")
+    run_cmd(
+        f"{'DELTA_PAGER=\"cat\"' if not use_pager else ''} delta -s --hunk-header-style omit '{expected_label}' '{received_label}'"
+    )
 
     os.remove(expected_label)
     os.remove(received_label)
