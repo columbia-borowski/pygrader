@@ -59,6 +59,7 @@ class TestRunner(ABC):
         timeout (int): The timeout for each test case. Defaults to 1.
         run_on_shell (bool): Whether to run the command on the shell. Defaults to False.
         redirect_stderr_to_stdout (bool): Whether to redirect stderr to stdout. Defaults to False.
+        diff_use_pager (bool): Whether to use a pager for the diff. Defaults to True.
     """
 
     def __init__(
@@ -71,6 +72,7 @@ class TestRunner(ABC):
         timeout: int = 1,
         run_on_shell: bool = False,
         redirect_stderr_to_stdout: bool = False,
+        diff_use_pager: bool = True,
     ):
         self.test_cases = test_cases
         self.setup_function = setup_function
@@ -80,6 +82,7 @@ class TestRunner(ABC):
         self.timeout = timeout
         self.run_on_shell = run_on_shell
         self.redirect_stderr_to_stdout = redirect_stderr_to_stdout
+        self.diff_use_pager = diff_use_pager
 
         self.is_compiled = None
 
@@ -94,6 +97,7 @@ class TestRunner(ABC):
         timeout: int | None = None,
         run_on_shell: bool | None = None,
         redirect_stderr_to_stdout: bool | None = None,
+        diff_use_pager: bool | None = None,
     ) -> list[tuple[str, str]] | None:
         """
         Runs all test cases for a given item code.
@@ -105,6 +109,7 @@ class TestRunner(ABC):
             timeout (int | None): The timeout for each test case. Defaults to None.
             run_on_shell (bool | None): Whether to run the command on the shell. Defaults to None.
             redirect_stderr_to_stdout (bool | None): Whether to redirect stderr to stdout. Defaults to None.
+            diff_use_pager (bool | None): Whether to use a pager for the diff. Defaults to None.
 
         Returns:
             list[tuple[str, str]] | None: A list of tuples where each tuple contains:
@@ -119,6 +124,9 @@ class TestRunner(ABC):
 
         if redirect_stderr_to_stdout is None:
             redirect_stderr_to_stdout = self.redirect_stderr_to_stdout
+
+        if diff_use_pager is None:
+            diff_use_pager = self.diff_use_pager
 
         if run_on_shell is None:
             run_on_shell = self.run_on_shell
@@ -140,6 +148,7 @@ class TestRunner(ABC):
                 timeout,
                 run_on_shell,
                 redirect_stderr_to_stdout,
+                diff_use_pager,
             )
             for i, test_case in enumerate(test_cases, 1)
         ]
@@ -160,6 +169,7 @@ class TestRunner(ABC):
         timeout: int,
         run_on_shell: bool,
         redirect_stderr_to_stdout: bool,
+        diff_use_pager: bool,
     ) -> tuple[str, str] | None:
         """
         Runs a single test case.
@@ -173,6 +183,7 @@ class TestRunner(ABC):
             timeout (int): The timeout for the test case.
             run_on_shell (bool): Whether to run the command on the shell.
             redirect_stderr_to_stdout (bool): Whether to redirect stderr to stdout.
+            diff_use_pager (bool): Whether to use a pager for the diff.
 
         Returns:
             tuple[str, str] | None: A tuple containing:
@@ -214,10 +225,20 @@ class TestRunner(ABC):
                 expected_return_code, received_return_code, comments
             )
             and self._check_stream(
-                "stdout", expected_stdout, received_stdout, subitem_code, comments
+                "stdout",
+                expected_stdout,
+                received_stdout,
+                subitem_code,
+                comments,
+                diff_use_pager,
             )
             and self._check_stream(
-                "stderr", expected_stderr, received_stderr, subitem_code, comments
+                "stderr",
+                expected_stderr,
+                received_stderr,
+                subitem_code,
+                comments,
+                diff_use_pager,
             )
         )
 
@@ -269,6 +290,7 @@ class TestRunner(ABC):
         received: str | None,
         subitem_code: str,
         comments: list[str],
+        diff_use_pager: bool,
     ):
         """
         Checks if the received stream matches the expected stream.
@@ -279,6 +301,8 @@ class TestRunner(ABC):
             received (str | None): The received stream output.
             subitem_code (str): The subitem code for the test case.
             comments (list[str]): The list of comments to append messages to.
+            diff_use_pager (bool): Whether to use a pager for the diff.
+
 
         Returns:
             bool: True if the streams match, False otherwise.
@@ -290,13 +314,25 @@ class TestRunner(ABC):
             message = f"{stream} is incorrect"
             comments.append(message)
             p.print_red(f"[ {message} ]")
-            u.diff(expected, received, f"Expected {stream}", f"Received {stream}")
+            u.diff(
+                expected,
+                received,
+                f"Expected {stream}",
+                f"Received {stream}",
+                use_pager=diff_use_pager,
+            )
             return False
 
         if not self.check_stream_exact_match(stream, expected, received):
             self.items_with_formatting_errors.append(subitem_code)
             p.print_yellow(f"{stream} is correct but formatting is incorrect")
-            u.diff(expected, received, f"Expected {stream}", f"Received {stream}")
+            u.diff(
+                expected,
+                received,
+                f"Expected {stream}",
+                f"Received {stream}",
+                use_pager=diff_use_pager,
+            )
         else:
             p.print_green(f"[ {stream} is correct ]")
 
