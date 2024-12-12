@@ -170,6 +170,12 @@ class MidtermModule(CommandModule):
                 ] = midterm2_dict
                 continue
 
+            if midterm2_submission.excused:
+                lower_midterm_grade_data[user_id] = higher_midterm_grade_data[
+                    user_id
+                ] = midterm1_dict
+                continue
+
             higher_midterm_grade_data[user_id] = midterm1_dict
             lower_midterm_grade_data[user_id] = midterm2_dict
             if int(midterm2_submission.grade) > int(midterm1_submission.grade):
