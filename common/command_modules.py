@@ -242,17 +242,16 @@ class GradeModule(CommandWithHWDetailsModule):
         Returns:
             bool: False if the submission was already graded, True otherwise.
         """
-        grader = hw_manager.get_submission_grader(env, submitter)
+        grades = hw_manager.get_grades(submitter, env["ta"])
         if (
             not env["test_only"]
             and not env["regrade"]
             and skip_if_graded
-            and grader.grades.status(env["code"])[0]
+            and grades.status(env["code"])[0]
         ):
             return False
 
-        grader.grade()
-        grader.hw_tester.cleanup()
+        hw_manager.get_submission_grader(env, submitter).grade()
         return True
 
 

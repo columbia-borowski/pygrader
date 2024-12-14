@@ -76,6 +76,8 @@ class Grader:
             rubric_item_obj = self.hw_tester.manager.rubric[table][key]
             self._grade_item(rubric_item_obj)
 
+        self.hw_tester.cleanup()
+
         p.print_magenta(
             f"\n[ Pretty-printing pts/comments for {self.hw_tester.submitter}... ]"
         )
