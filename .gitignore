@@ -2,6 +2,7 @@ __pycache__/
 grades/
 moss/
 quizzes/
+venv/
 *.swp
 .python-version
 .env
