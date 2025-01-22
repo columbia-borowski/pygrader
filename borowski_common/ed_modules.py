@@ -297,3 +297,119 @@ class GradesPostModule(CommandModule):
             },
         )
         response.raise_for_status()
+
+
+class LecturePostsModule(CommandModule):
+    """
+    A command module to schedule lecture posts on Ed.
+
+    Methods:
+        extend_parser(parser: ArgumentParser): Extends the argument parser with additional arguments.
+        run(parsed: Namespace): Runs the post grades command.
+    """
+
+    def __init__(self):
+        super().__init__("lecture-posts")
+        self.weekday_map = {"M": 0, "T": 1, "W": 2, "R": 3, "F": 4}
+
+    def extend_parser(self, parser: ArgumentParser):
+        """
+        Extends the argument parser with additional arguments.
+
+        Args:
+            parser (ArgumentParser): The argument parser to extend.
+        """
+        parser.add_argument(
+            "-w",
+            "--weekdays",
+            required=True,
+            dest="weekdays",
+            type=str,
+            nargs="+",
+            choices=self.weekday_map.keys(),
+            help="weekdays to post lectures (e.g. M, T, W, R, F)",
+        )
+        parser.add_argument(
+            "-t",
+            "--time",
+            required=True,
+            dest="time",
+            type=str,
+            help="time to post lectures (e.g. 09:00 AM)",
+        )
+        parser.add_argument(
+            "-s",
+            "--start-date",
+            required=True,
+            dest="start_date",
+            type=str,
+            help="start date for lecture posts (e.g. 2021-09-01)",
+        )
+        parser.add_argument(
+            "-e",
+            "--end-date",
+            required=True,
+            dest="end_date",
+            type=str,
+            help="end date for lecture posts (e.g. 2021-12-31)",
+        )
+
+    def run(self, parsed: Namespace):
+        """
+        Runs the command to schedule lecture posts on Ed.
+
+        Args:
+            parsed (Namespace): The parsed command-line arguments.
+        """
+        start_date = datetime.strptime(parsed.start_date, "%Y-%m-%d")
+        end_date = datetime.strptime(parsed.end_date, "%Y-%m-%d")
+
+        for date in self._get_dates(parsed.weekdays, start_date, end_date):
+            date = NYZ_TZ.localize(
+                datetime.strptime(
+                    f"{date.strftime('%Y-%m-%d')} {parsed.time}", "%Y-%m-%d %I:%M %p"
+                )
+            )
+
+            thread_response = requests.post(
+                f"https://us.edstem.org/api/courses/{ED_COURSE_ID}/thread_drafts",
+                headers=ED_HEADERS,
+                json={
+                    "thread_draft": {
+                        "course_id": ED_COURSE_ID,
+                        "type": "announcement",
+                        "title": f"{date.strftime('%m/%d')} Lecture Questions Thread",
+                        "content": "<document version=\"2.0\"><paragraph>Hello, this will be a place for you to ask questions during today's lecture!</paragraph><paragraph>The process is simple, have a question? Post it here and you'll get a reply from the TA who is currently sitting in on your lecture.</paragraph></document>",
+                        "category": "Lectures",
+                        "subcategory": "",
+                        "subsubcategory": "",
+                        "is_pinned": True,
+                        "is_private": False,
+                        "is_anonymous": False,
+                        "is_megathread": True,
+                        "anonymous_comments": False,
+                    }
+                },
+                timeout=10,
+            )
+            thread_id = thread_response.json()["thread_draft"]["id"]
+
+            requests.patch(
+                f"https://us.edstem.org/api/thread_drafts/{thread_id}/schedule",
+                params={
+                    "send_emails": "1",
+                    "scheduled_time": date.isoformat(timespec="milliseconds"),
+                },
+                headers=ED_HEADERS,
+                timeout=10,
+            )
+
+    def _get_dates(self, chosen_days, start_date, end_date):
+        chosen_weekdays = {self.weekday_map[day] for day in chosen_days}
+
+        current_date = max(start_date, datetime.today())
+        while current_date <= end_date:
+            if current_date.weekday() in chosen_weekdays:
+                yield current_date
+
+            current_date += timedelta(days=1)
