@@ -44,7 +44,7 @@ class GoodJobPolicy(GradingPolicy):
         """
         new_comments = [*all_comments]
 
-        if total_pts >= 93:
+        if total_pts >= policy_data.get("cutoff", 93):
             new_comment = random.choice(GOOD_JOB_PHRASES)
             if "student_names" in policy_data:
                 first_names = [
