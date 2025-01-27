@@ -479,12 +479,12 @@ class BorowskiHWSetupSubcommand(CommandModule):
         )
         return {"uni": ta_uni, "name": self.tas[ta_uni].name}
 
-    def _remove_grades_for_submission(self, login_id: str, ta: str):
+    def _remove_grades_for_submission(self, submission_id: str, ta: str):
         """
         Removes the grades for the specified submission.
 
         Args:
-            login_id (str): The login ID of the submitter.
+            submission_id (str): The ID of the submitter.
             ta (str): The TA's identifier.
         """
         ta_grades_file_path = os.path.join(self.grade_hwN_dir, "grades", f"{ta}.json")
@@ -493,7 +493,7 @@ class BorowskiHWSetupSubcommand(CommandModule):
             with open(ta_grades_file_path, "r", encoding="utf-8") as ta_grades_f:
                 ta_grades = json.load(ta_grades_f)
 
-            ta_grades.pop(login_id, None)
+            ta_grades.pop(submission_id, None)
             with open(ta_grades_file_path, "w", encoding="utf-8") as ta_grades_f:
                 json.dump(ta_grades, ta_grades_f, indent=4, sort_keys=True)
 

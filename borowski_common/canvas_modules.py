@@ -315,7 +315,7 @@ class QuizExtensionsModule(CommandModule):
         course = Canvas().get_course()
         quiz = course.get_quiz(parsed.canvas_id)
 
-        uni_to_user_id = {user.login_id: str(user.id) for user in course.get_users()}
+        uni_to_user_id = {user.sis_user_id: str(user.id) for user in course.get_users()}
 
         quiz_extensions = []
         approved_students = self._get_approved_students()
