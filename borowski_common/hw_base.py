@@ -334,9 +334,9 @@ class BorowskiHWSetupSubcommand(CommandModule):
         extend_parser(parser: ArgumentParser): Extends the argument parser with additional arguments.
         run(parsed: Namespace): Runs the setup command.
         init_setup(parsed: Namespace): Initializes the setup process.
-        setup_submission(submission, login_id: str, silent=True): Sets up a submission.
+        setup_submission(submission, submission_id: str, silent=True): Sets up a submission.
         download_submission(submission, silent: bool = True): Downloads a submission.
-        setup_dummy_submission(login_id: str): Sets up a dummy submission.
+        setup_dummy_submission(submission_id: str): Sets up a dummy submission.
     """
 
     def __init__(self, name: str, parent_command_module: CommandModule = None):
@@ -461,13 +461,13 @@ class BorowskiHWSetupSubcommand(CommandModule):
             self.ta_count_mapping[ta] += 1
 
     @abstractmethod
-    def setup_submission(self, submission: Any, login_id: str, silent=True):
+    def setup_submission(self, submission: Any, submission_id: str, silent=True):
         """
         Sets up a submission.
 
         Args:
             submission (Any): The submission object.
-            login_id (str): The login ID of the submitter.
+            submission_id (str): The login ID of the submitter.
             silent (bool): Whether to suppress output. Defaults to True.
         """
 
@@ -493,12 +493,12 @@ class BorowskiHWSetupSubcommand(CommandModule):
         )
         return {"uni": ta_uni, "name": self.tas[ta_uni].name}
 
-    def _remove_grades_for_submission(self, login_id: str, ta: str):
+    def _remove_grades_for_submission(self, submission_id: str, ta: str):
         """
         Removes the grades for the specified submission.
 
         Args:
-            login_id (str): The login ID of the submitter.
+            submission_id (str): The ID of the submitter.
             ta (str): The TA's identifier.
         """
         ta_grades_file_path = os.path.join(self.grade_hwN_dir, "grades", f"{ta}.json")
@@ -507,7 +507,7 @@ class BorowskiHWSetupSubcommand(CommandModule):
             with open(ta_grades_file_path, "r", encoding="utf-8") as ta_grades_f:
                 ta_grades = json.load(ta_grades_f)
 
-            ta_grades.pop(login_id, None)
+            ta_grades.pop(submission_id, None)
             with open(ta_grades_file_path, "w", encoding="utf-8") as ta_grades_f:
                 json.dump(ta_grades, ta_grades_f, indent=4, sort_keys=True)
 
@@ -522,12 +522,12 @@ class BorowskiHWSetupSubcommand(CommandModule):
         """
 
     @abstractmethod
-    def setup_dummy_submission(self, login_id: str):
+    def setup_dummy_submission(self, submission_id: str):
         """
         Sets up a dummy submission.
 
         Args:
-            login_id (str): The login ID of the submitter.
+            submission_id (str): The ID of the submitter.
         """
 
     def _update_mapping_files(self):
