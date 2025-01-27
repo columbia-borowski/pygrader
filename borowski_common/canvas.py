@@ -96,7 +96,7 @@ class Canvas:
         """
         if not self.students:
             self.students = {
-                student.login_id: student
+                student.sis_user_id: student
                 for student in self.get_course().get_users(enrollment_type=["student"])
             }
         return self.students
@@ -110,7 +110,7 @@ class Canvas:
         """
         if not self.tas:
             self.tas = {
-                ta.login_id: ta
+                ta.sis_user_id: ta
                 for ta in self.get_course().get_users(enrollment_type=["ta"])
             }
         return self.tas
@@ -162,7 +162,7 @@ class Canvas:
         """
         if not self.uni_to_user_id_map:
             self.uni_to_user_id_map = {
-                user.login_id: str(user.id) for user in self.get_course().get_users()
+                user.sis_user_id: str(user.id) for user in self.get_course().get_users()
             }
 
         new_data = {}
