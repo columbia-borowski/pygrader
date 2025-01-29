@@ -552,13 +552,14 @@ class BorowskiHWTester(HWTester):
         self.submission_data = manager.get_submission_data(self.submitter)
 
     def check_file_structure(
-        self, rubric_item_code: str
+        self, rubric_item_code: str, autofix: bool = True
     ) -> bool | list[tuple[str, str]] | None:
         """
         Checks the file structure of the submission.
 
         Args:
             rubric_item_code (str): The rubric item code.
+            autofix (bool): Whether to fix the file structure automatically. Defaults to True.
 
         Returns:
             bool | list[tuple[str, str]] | None: True if the file structure is correct, a list of deductions if fixed automatically, or None.
@@ -574,10 +575,11 @@ class BorowskiHWTester(HWTester):
             return None
 
         self._print_file_structure()
-        res = self._try_to_fix_structure()
+
+        res = self._try_to_fix_structure(autofix)
 
         if res is None:
-            p.print_red("[ Incorrect File Structure: please fix and deduct ]")
+            p.print_red("[ Incorrect File Structure ]")
         elif res is False:
             p.print_red("[ Incorrect File Structure but fixed automatically ]")
             self._print_file_structure()
@@ -596,9 +598,12 @@ class BorowskiHWTester(HWTester):
         ignored_files = "|".join([".git", "__MACOSX", *self.hidden_files])
         u.run_cmd(f"tree -a -C -I '{ignored_files}'")
 
-    def _try_to_fix_structure(self) -> bool | None:
+    def _try_to_fix_structure(self, autofix: bool) -> bool | None:
         """
         Tries to fix the file structure of the submission if needed.
+
+        Args:
+            autofix (bool): Whether to fix the file structure automatically.
 
         Returns:
             bool | None: True if the file structure is correct, False if fixed automatically, or None.
@@ -617,6 +622,9 @@ class BorowskiHWTester(HWTester):
 
         if all_files_in_dir == required_files:
             return True
+
+        if not autofix:
+            return None
 
         fixes = {}
         for missing_file in missing_files:
