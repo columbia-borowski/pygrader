@@ -700,3 +700,11 @@ class BorowskiHWTester(HWTester):
         p.print_cyan(f"\n[ Exiting {self.manager.hw_name} grader... ]")
         self.cleanup()
         sys.exit()
+
+    def cleanup(self):
+        """
+        Cleans up the grader.
+        """
+        for file in self.copied_files:
+            if os.path.exists(file):
+                os.remove(file)
