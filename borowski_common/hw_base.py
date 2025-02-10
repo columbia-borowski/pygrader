@@ -304,6 +304,43 @@ class BorowskiHWManager(HWManager):
 
         return self._submissions
 
+    def get_ta_for_regrade_request(self, uni: str, content: str) -> str | None:
+        """
+        Assigns a TA to a regrade request based on the poster's UNI.
+
+        Args:
+            uni (str): The poster's UNI.
+            content (str): The content of the post.
+
+        Returns:
+            str | None: The TA identifier or None if no TA was found.
+        """
+        try:
+            ta_uni = self.get_submission_data(uni)["ta"]["uni"]
+        except KeyError:
+            try:
+                uni = self._get_uni_from_post(content)
+                ta_uni = self.get_submission_data(uni)["ta"]["uni"]
+            except KeyError:
+                return None
+
+        return ta_uni
+
+    def _get_uni_from_post(self, content: str):
+        """
+        Extracts the UNI from a post.
+
+        Args:
+            content (str): The content of the post.
+
+        Returns:
+            str: The extracted UNI.
+        """
+        for line in content.lower().splitlines():
+            if "uni:" in line:
+                return line.split("uni:")[1].strip()
+        return None
+
 
 class BorowskiHWSetup(CompositeCommandModule):
     """
