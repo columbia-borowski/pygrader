@@ -1,5 +1,7 @@
 """borowski_common/command_modules.py: Custom command modules"""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -32,8 +34,6 @@ class RegradeRequestModule(CommandModule):
         run(parsed: Namespace): Runs the regrade request command.
         _connect_to_websocket(hw: str, round_robin: bool, index: int, category: str): Connects to the Ed websocket.
         _get_user_info(): Retrieves user information from Ed.
-        _get_ta_tag_comment(thread_id, submitter, content): Generates a TA tag comment.
-        _get_uni_from_post(content): Extracts the UNI from a post.
     """
 
     def __init__(self):
@@ -108,7 +108,7 @@ class RegradeRequestModule(CommandModule):
         while True:
             try:
                 async with websockets.connect(
-                    "wss://us.edstem.org/api/stream", additional_headers=ED_HEADERS
+                    "wss://us.edstem.org/api/stream", extra_headers=ED_HEADERS
                 ) as websocket:
                     logger.info("Connected to Web Socket")
                     await websocket.send(
@@ -139,11 +139,30 @@ class RegradeRequestModule(CommandModule):
                                     f'<mention id="{ta_id}">{ta_name}</mention>'
                                 )
                             else:
-                                comment_content = self._get_ta_tag_comment(
-                                    thread_id,
+                                ta_uni = self.hw_manager.get_ta_for_regrade_request(
                                     self.ed_id_to_ed_user[poster_id]["sourced_id"],
                                     response["data"]["thread"]["document"],
                                 )
+
+                                if ta_uni:
+                                    ta_id = self.uni_to_ed_id_map[ta_uni]
+                                    ta_name = self.ed_id_to_ed_user[ta_id]["name"]
+
+                                    logger.info(
+                                        "Assigned thread %d to %s", thread_id, ta_name
+                                    )
+
+                                    comment_content = (
+                                        f'<mention id="{ta_id}">{ta_name}</mention>'
+                                    )
+                                else:
+                                    logger.error(
+                                        "Could not find TA for thread %d", thread_id
+                                    )
+
+                                    comment_content = (
+                                        "Could not find TA for this submission"
+                                    )
 
                             response = requests.post(
                                 f"https://us.edstem.org/api/threads/{thread_id}/comments",
@@ -185,50 +204,6 @@ class RegradeRequestModule(CommandModule):
             ),
             key=lambda u: u["name"],
         )
-
-    def _get_ta_tag_comment(self, thread_id: str, submitter: str, content: str):
-        """
-        Generates a TA tag comment.
-
-        Args:
-            thread_id (str): The thread ID.
-            submitter (str): The submitter's identifier.
-            content (str): The content of the post.
-
-        Returns:
-            str: The TA tag comment.
-        """
-        try:
-            ta_uni = self.hw_manager.get_submission_data(submitter)["ta"]["uni"]
-        except KeyError:
-            try:
-                submitter = self._get_uni_from_post(content)
-                ta_uni = self.hw_manager.get_submission_data(submitter)["ta"]["uni"]
-            except KeyError:
-                logger.error("Could not find TA for thread %d", thread_id)
-                return "Could not find TA for this submission"
-
-        ta_id = self.uni_to_ed_id_map[ta_uni]
-        ta_name = self.ed_id_to_ed_user[ta_id]["name"]
-
-        logger.info("Assigned thread %d to %s", thread_id, ta_name)
-
-        return f'<mention id="{ta_id}">{ta_name}</mention>'
-
-    def _get_uni_from_post(self, content: str):
-        """
-        Extracts the UNI from a post.
-
-        Args:
-            content (str): The content of the post.
-
-        Returns:
-            str: The extracted UNI.
-        """
-        for line in content.lower().splitlines():
-            if "uni:" in line:
-                return line.split("uni:")[1].strip()
-        return None
 
 
 class GradesPostModule(CommandModule):
