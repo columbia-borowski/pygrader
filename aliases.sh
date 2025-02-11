@@ -55,3 +55,12 @@ function upload-grades() {
 function upload-late-days() {
     $PYGRADER_ROOT/canvas_scripts.py upload late_days "$@"
 }
+
+function grades-release() {
+    progress || exit 1
+    chmod 640 $PYGRADER_ROOT/moss/reports/*/$HW/index.html
+    python3 $PYGRADER_ROOT/ed_scripts.py grades-post $HW
+    upload-grades
+    pkill -f regrades
+    nohup python3 $PYGRADER_ROOT/ed_scripts.py regrades $HW >/dev/null &
+}
