@@ -164,6 +164,15 @@ class HWTester:
         self.ran_rubric_tests = set()
 
     @abstractmethod
+    def setup(self, rubric_code: str):
+        """
+        Sets up the homework tester.
+
+        Args:
+            rubric_code (str): The rubric code.
+        """
+
+    @abstractmethod
     def get_grading_policy_data(self) -> dict[str, Any]:
         """
         Retrieves the grading policy data.
@@ -393,6 +402,11 @@ class BaseHWSetup(HWSetup):
 
 class BaseHWTester(HWTester):
     """Base class for homework testers."""
+
+    def setup(self, _):
+        """
+        Sets up the homework tester.
+        """
 
     def get_grading_policy_data(self):
         """

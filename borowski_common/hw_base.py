@@ -576,17 +576,17 @@ class BorowskiHWTester(HWTester):
             manager (BorowskiHWManager): The homework manager.
         """
         super().__init__(submitter, manager)
+        self.hidden_files = set()
+        self.copied_files = set()
 
-        self.submission_dir = manager.get_submission_dir(self.submitter)
+    def setup(self, _):
+        self.submission_dir = self.manager.get_submission_dir(self.submitter)
         if not os.path.isdir(self.submission_dir):
             sys.exit("Submission not found")
 
         os.chdir(self.submission_dir)
 
-        self.hidden_files = set()
-        self.copied_files = set()
-
-        self.submission_data = manager.get_submission_data(self.submitter)
+        self.submission_data = self.manager.get_submission_data(self.submitter)
 
     def check_file_structure(
         self, rubric_item_code: str, autofix: bool = True

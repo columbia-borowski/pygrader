@@ -331,6 +331,7 @@ class InspectModule(CommandModule):
         """
         hw_manager = get_assignment_manager(parsed.hw)
         tester = hw_manager.get_hw_tester(parsed.submitter)
+        tester.setup("ALL")
         u.open_shell()
         tester.cleanup()
 
