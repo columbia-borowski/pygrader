@@ -325,7 +325,7 @@ class TestRunner(ABC):
 
         if not self.check_stream_exact_match(stream, expected, received):
             self.items_with_formatting_errors.append(subitem_code)
-            p.print_yellow(f"{stream} is correct but formatting is incorrect")
+            p.print_yellow(f"[ {stream} is correct but formatting is incorrect ]")
             u.diff(
                 expected,
                 received,
@@ -430,8 +430,12 @@ class WhitespaceTestRunner(TestRunner):
         Returns:
             bool: True if the streams match after stripping whitespace, False otherwise.
         """
-        stripped_expected = expected.replace(" ", "").replace("\n", "")
-        stripped_received = received.replace(" ", "").replace("\n", "")
+        stripped_expected = (
+            expected.replace(" ", "").replace("\n", "").replace("\t", "")
+        )
+        stripped_received = (
+            received.replace(" ", "").replace("\n", "").replace("\t", "")
+        )
 
         return stripped_expected == stripped_received
 
