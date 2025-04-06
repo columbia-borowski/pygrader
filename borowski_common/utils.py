@@ -36,6 +36,7 @@ def run_cmd_with_timeout(
         stderr=stderr,
         close_fds=True,
         universal_newlines=True,
+        errors="replace",
     ) as process:
         try:
             stdout_data, stderr_data = process.communicate(input=stdin, timeout=timeout)
