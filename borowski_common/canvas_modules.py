@@ -246,6 +246,7 @@ class FinalGradesModule(CommandModule):
         )
         parser.add_argument(
             "final_with_bonus_canvas_id",
+            default=None,
             type=str,
             help="the canvas id of the final grade with bonus assignment",
         )
@@ -274,9 +275,10 @@ class FinalGradesModule(CommandModule):
             final_with_bonus_data[user_id] = get_grade_dict(score + 1)
 
         canvas.upload_raw_grades(parsed.final_canvas_id, final_data)
-        canvas.upload_raw_grades(
-            parsed.final_with_bonus_canvas_id, final_with_bonus_data
-        )
+        if parsed.final_with_bonus_canvas_id:
+            canvas.upload_raw_grades(
+                parsed.final_with_bonus_canvas_id, final_with_bonus_data
+            )
 
 
 class QuizExtensionsModule(CommandModule):
