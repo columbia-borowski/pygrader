@@ -1,7 +1,6 @@
 """borowski_common/canvas_modules.py: canvas modules"""
 
 import json
-import statistics
 import sys
 from argparse import ArgumentParser, Namespace
 from csv import DictReader
@@ -10,6 +9,11 @@ from math import ceil
 from typing import Any
 
 import requests
+import numpy as np
+from sklearn.experimental import ( # noqa # pylint: disable=unused-import
+    enable_iterative_imputer, 
+)  
+from sklearn.impute import IterativeImputer
 
 from borowski_common.canvas import Canvas
 from borowski_common.constants import ACCOMMODATIONS_SHEET_ID
@@ -483,7 +487,7 @@ class DownloadQuizModule(CommandModule):
 
 class MissingExamModule(CommandModule):
     """
-    A command module to calculatr missing exam score submissions.
+    A command module to calculate missing exam score submissions using multiple imputation for fairness.
 
     Methods:
         extend_parser(parser: ArgumentParser): Extends the argument parser with additional arguments.
@@ -515,57 +519,60 @@ class MissingExamModule(CommandModule):
 
     def run(self, parsed: Namespace):
         """
-        Runs the missing exam command.
+        Runs the missing exam command, imputing missing scores via iterative multiple imputation.
 
         Args:
             parsed (Namespace): The parsed command-line arguments.
         """
         canvas = Canvas()
         course = canvas.get_course()
-        assignment_scores = {
-            assignment_id: {} for assignment_id in parsed.canvas_assignment_ids
-        }
+        assignment_ids = parsed.canvas_assignment_ids
+        assignment_scores = {assignment_id: {} for assignment_id in assignment_ids}
         excused_students = {}
+        all_user_ids = set()
 
-        for assignment_id in parsed.canvas_assignment_ids:
+        for assignment_id in assignment_ids:
             assignment = course.get_assignment(assignment_id)
-
             for submission in assignment.get_submissions():
                 user_id = submission.user_id
-
+                all_user_ids.add(user_id)
                 if submission.excused:
-                    if user_id not in excused_students:
-                        excused_students[user_id] = set()
-
-                    excused_students[user_id].add(assignment_id)
+                    excused_students.setdefault(user_id, set()).add(assignment_id)
                 elif submission.score is not None:
                     assignment_scores[assignment_id][user_id] = float(submission.score)
 
-        means, stds = {}, {}
-        for assignment_id, scores in assignment_scores.items():
-            vals = list(scores.values())
-            means[assignment_id] = statistics.mean(vals)
-            stds[assignment_id] = statistics.pstdev(vals)
+        all_user_ids = sorted(all_user_ids)
+        user_ids_to_index = {user_id: i for i, user_id in enumerate(all_user_ids)}
+        assignment_ids_to_index = {
+            assignment_id: i for i, assignment_id in enumerate(assignment_ids)
+        }
+        data = np.full((len(all_user_ids), len(assignment_ids)), np.nan)
+        for assignment_id in assignment_ids:
+            for user_id, score in assignment_scores[assignment_id].items():
+                data[
+                    user_ids_to_index[user_id], assignment_ids_to_index[assignment_id]
+                ] = score
+
+        imputer = IterativeImputer(random_state=0)
+        filled = imputer.fit_transform(data)
 
         imputed_scores = {user_id: {} for user_id in excused_students}
-        for user_id, excused_assignment_ids in excused_students.items():
-            avg_z = statistics.mean(
-                (float(scores[user_id]) - means[assignment_id]) / stds[assignment_id]
-                for assignment_id, scores in assignment_scores.items()
-                if assignment_id not in excused_assignment_ids
-            )
-
-            for assignment_id in excused_assignment_ids:
+        for user_id, missing_ids in excused_students.items():
+            for assignment_id in missing_ids:
                 imputed_scores[user_id][assignment_id] = round(
-                    means[assignment_id] + avg_z * stds[assignment_id], 2
+                    filled[
+                        user_ids_to_index[user_id],
+                        assignment_ids_to_index[assignment_id],
+                    ],
+                    2,
                 )
 
         final_scores = {}
         for user_id, scores in imputed_scores.items():
             for assignment_id, score in scores.items():
-                if assignment_id not in final_scores:
-                    final_scores[assignment_id] = {}
-                final_scores[assignment_id][user_id] = get_grade_dict(score)
+                final_scores.setdefault(assignment_id, {})[user_id] = get_grade_dict(
+                    score
+                )
 
         if parsed.dry_run:
             print(json.dumps(final_scores, indent=2))
