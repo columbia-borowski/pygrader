@@ -6,6 +6,7 @@ from borowski_common.canvas_modules import (
     DownloadQuizModule,
     FinalGradesModule,
     MidtermModule,
+    MissingExamModule,
     QuizExtensionsModule,
     QuizRegradesModule,
     UploadGradesModule,
@@ -22,5 +23,6 @@ if __name__ == "__main__":
             QuizExtensionsModule(),
             QuizRegradesModule(),
             DownloadQuizModule(),
+            MissingExamModule(),
         )
     )

@@ -1,5 +1,7 @@
 """borowski_common/canvas_modules.py: canvas modules"""
 
+import json
+import statistics
 import sys
 from argparse import ArgumentParser, Namespace
 from csv import DictReader
@@ -477,6 +479,100 @@ class DownloadQuizModule(CommandModule):
         """
         quiz_downloader = QuizDownloader(parsed.canvas_quiz_id)
         quiz_downloader.download()
+
+
+class MissingExamModule(CommandModule):
+    """
+    A command module to calculatr missing exam score submissions.
+
+    Methods:
+        extend_parser(parser: ArgumentParser): Extends the argument parser with additional arguments.
+        run(parsed: Namespace): Runs the missing exam command.
+    """
+
+    def __init__(self):
+        super().__init__("missing-exam")
+
+    def extend_parser(self, parser: ArgumentParser):
+        """
+        Extends the argument parser with additional arguments.
+
+        Args:
+            parser (ArgumentParser): The argument parser to extend.
+        """
+        parser.add_argument(
+            "--dry-run",
+            "-d",
+            action="store_true",
+            help="if set, do not upload grades",
+        )
+        parser.add_argument(
+            "canvas_assignment_ids",
+            type=str,
+            nargs="+",
+            help="the canvas id of the assignment",
+        )
+
+    def run(self, parsed: Namespace):
+        """
+        Runs the missing exam command.
+
+        Args:
+            parsed (Namespace): The parsed command-line arguments.
+        """
+        canvas = Canvas()
+        course = canvas.get_course()
+        assignment_scores = {
+            assignment_id: {} for assignment_id in parsed.canvas_assignment_ids
+        }
+        excused_students = {}
+
+        for assignment_id in parsed.canvas_assignment_ids:
+            assignment = course.get_assignment(assignment_id)
+
+            for submission in assignment.get_submissions():
+                user_id = submission.user_id
+
+                if submission.excused:
+                    if user_id not in excused_students:
+                        excused_students[user_id] = set()
+
+                    excused_students[user_id].add(assignment_id)
+                elif submission.score is not None:
+                    assignment_scores[assignment_id][user_id] = float(submission.score)
+
+        means, stds = {}, {}
+        for assignment_id, scores in assignment_scores.items():
+            vals = list(scores.values())
+            means[assignment_id] = statistics.mean(vals)
+            stds[assignment_id] = statistics.pstdev(vals)
+
+        imputed_scores = {user_id: {} for user_id in excused_students}
+        for user_id, excused_assignment_ids in excused_students.items():
+            avg_z = statistics.mean(
+                (float(scores[user_id]) - stds[assignment_id]) / means[assignment_id]
+                for assignment_id, scores in assignment_scores.items()
+                if assignment_id not in excused_assignment_ids
+            )
+
+            for assignment_id in excused_assignment_ids:
+                imputed_scores[user_id][assignment_id] = round(
+                    means[assignment_id] + avg_z * stds[assignment_id], 2
+                )
+
+        final_scores = {}
+        for user_id, scores in imputed_scores.items():
+            for assignment_id, score in scores.items():
+                if assignment_id not in final_scores:
+                    final_scores[assignment_id] = {}
+                final_scores[assignment_id][user_id] = get_grade_dict(score)
+
+        if parsed.dry_run:
+            print(json.dumps(final_scores, indent=2))
+            sys.exit(0)
+
+        for assignment_id, scores in final_scores.items():
+            canvas.upload_raw_grades(assignment_id, scores)
 
 
 def get_enrollment_dict(enrollment: Any):
