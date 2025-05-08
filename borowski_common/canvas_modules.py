@@ -550,7 +550,7 @@ class MissingExamModule(CommandModule):
         imputed_scores = {user_id: {} for user_id in excused_students}
         for user_id, excused_assignment_ids in excused_students.items():
             avg_z = statistics.mean(
-                (float(scores[user_id]) - stds[assignment_id]) / means[assignment_id]
+                (float(scores[user_id]) - means[assignment_id]) / stds[assignment_id]
                 for assignment_id, scores in assignment_scores.items()
                 if assignment_id not in excused_assignment_ids
             )
