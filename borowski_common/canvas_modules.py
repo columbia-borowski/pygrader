@@ -76,13 +76,14 @@ class ClassRankModule(CommandModule):
         canvas = Canvas()
         course = canvas.get_course()
 
-        enrollments = sorted(
-            map(
-                get_enrollment_dict, course.get_enrollments(type=["StudentEnrollment"])
-            ),
-            key=lambda enrollment: enrollment["score"],
-            reverse=True,
-        )
+        user_id_set = set()
+        enrollments = []
+        for enrollment_obj in course.get_enrollments(type=["StudentEnrollment"]):
+            if enrollment_obj.user_id not in user_id_set:
+                user_id_set.add(enrollment_obj.user_id)
+                enrollments.append(get_enrollment_dict(enrollment_obj))
+
+        enrollments.sort(key=lambda enrollment: enrollment["score"], reverse=True)
 
         class_rank_data = {enrollments[0]["user_id"]: get_grade_dict(1)}
         prev_score = enrollments[0]["score"]
