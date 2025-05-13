@@ -483,7 +483,7 @@ class DownloadQuizModule(CommandModule):
 
 class MissingExamModule(CommandModule):
     """
-    A command module to calculate missing exam score submissions based on average rank across exams.
+    A command module to calculate missing exam score submissions based on average percentile across exams.
 
     Methods:
         extend_parser(parser: ArgumentParser): Extends the argument parser with additional arguments.
@@ -515,7 +515,7 @@ class MissingExamModule(CommandModule):
 
     def run(self, parsed: Namespace):
         """
-        Runs the missing exam command, imputing missing scores by average rank.
+        Runs the missing exam command, imputing missing scores by average percentile.
 
         Args:
             parsed (Namespace): The parsed command-line arguments.
@@ -535,33 +535,36 @@ class MissingExamModule(CommandModule):
                 elif submission.score is not None:
                     assignment_scores[assignment_id][user_id] = float(submission.score)
 
-        ranks = {}
+        percentiles = {}
         sorted_scores_list = {}
         for assignment_id, scores in assignment_scores.items():
-            pairs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            pairs = sorted(scores.items(), key=lambda x: x[1])
             sorted_scores_list[assignment_id] = [score for _, score in pairs]
-            ranks[assignment_id] = {
-                user_id: rank for rank, (user_id, _) in enumerate(pairs, start=1)
+            N = len(sorted_scores_list[assignment_id])
+            percentiles[assignment_id] = {
+                user_id: (rank - 1) / (N - 1)
+                for rank, (user_id, _) in enumerate(pairs, start=1)
             }
 
-        imputed_scores = {user_id: {} for user_id in excused_students}
+        imputed_scores = {}
         for user_id, excused_assignment_ids in excused_students.items():
-            avg_rank = statistics.mean(
-                ranks[assignment_id][user_id]
+            avg_pct = statistics.mean(
+                percentiles[assignment_id][user_id]
                 for assignment_id in assignment_ids
                 if assignment_id not in excused_assignment_ids
             )
             for assignment_id in excused_assignment_ids:
                 scores_list = sorted_scores_list.get(assignment_id, [])
-                rank = max(1, min(avg_rank, len(scores_list)))
-                index = int(round(rank)) - 1
-                imputed_scores[user_id][assignment_id] = scores_list[index]
+                N = len(scores_list)
+                idx = max(0, min(int(round(avg_pct * (N - 1))), N - 1))
+                imputed_scores.setdefault(user_id, {})[assignment_id] = scores_list[idx]
 
         final_scores = {}
         for user_id, scores in imputed_scores.items():
             for assignment_id, score in scores.items():
                 final_scores.setdefault(assignment_id, {})[user_id] = get_grade_dict(
-                    score
+                    score,
+                    "Computed from average percentile across taken exams and looked up score for missing exam",
                 )
 
         if parsed.dry_run:
