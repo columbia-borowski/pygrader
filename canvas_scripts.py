@@ -3,6 +3,7 @@
 
 from borowski_common.canvas_modules import (
     ClassRankModule,
+    CurveScoresModule,
     DownloadQuizModule,
     FinalGradesModule,
     MidtermModule,
@@ -24,5 +25,6 @@ if __name__ == "__main__":
             QuizRegradesModule(),
             DownloadQuizModule(),
             MissingExamModule(),
+            CurveScoresModule(),
         )
     )

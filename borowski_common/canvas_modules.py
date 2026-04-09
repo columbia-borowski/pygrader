@@ -576,6 +576,226 @@ class MissingExamModule(CommandModule):
             canvas.upload_raw_grades(assignment_id, scores)
 
 
+class CurveScoresModule(CommandModule):
+    """
+    A command module to curve scores from a source assignment and write them to a target assignment.
+    Uses a power curve (score/max)^p that flattens near the top, preserving ordering
+    and ensuring scores never decrease or exceed the assignment max.
+    """
+
+    def __init__(self):
+        super().__init__("curve")
+
+    def extend_parser(self, parser: ArgumentParser):
+        parser.add_argument(
+            "source_canvas_id",
+            type=str,
+            help="canvas ID of the source assignment to read scores from",
+        )
+        parser.add_argument(
+            "target_canvas_id",
+            type=str,
+            help="canvas ID of the target assignment to write curved scores to",
+        )
+
+        curve_group = parser.add_mutually_exclusive_group(required=True)
+        curve_group.add_argument(
+            "--target-mean",
+            type=float,
+            help="target mean score after curving",
+        )
+        curve_group.add_argument(
+            "--target-median",
+            type=float,
+            help="target median score after curving",
+        )
+
+        parser.add_argument(
+            "--boost",
+            type=float,
+            default=0,
+            help="fraction (0 to 1) to pull all scores toward the max, applied after the power curve",
+        )
+
+        parser.add_argument(
+            "--preview",
+            action="store_true",
+            help="preview curved grade distribution and statistics without uploading",
+        )
+
+    def run(self, parsed: Namespace):
+        canvas = Canvas()
+        course = canvas.get_course()
+
+        boost = parsed.boost
+        if not 0 <= boost < 1:
+            p.print_red("Error: --boost must be >= 0 and < 1.")
+            sys.exit(1)
+
+        assignment = course.get_assignment(parsed.source_canvas_id)
+        max_points = float(assignment.points_possible)
+        scores = {}
+        for submission in assignment.get_submissions():
+            if submission.score is not None and not submission.excused:
+                scores[submission.user_id] = float(submission.score)
+
+        if len(scores) < 2:
+            p.print_red("Error: Not enough scored submissions to curve.")
+            sys.exit(1)
+
+        score_values = sorted(scores.values())
+        current_mean = statistics.mean(score_values)
+        current_median = statistics.median(score_values)
+
+        if parsed.target_mean is not None:
+            stat_name = "mean"
+            stat_fn = statistics.mean
+            target_value = parsed.target_mean
+            current_value = current_mean
+        else:
+            stat_name = "median"
+            stat_fn = statistics.median
+            target_value = parsed.target_median
+            current_value = current_median
+
+        if target_value < current_value:
+            p.print_red(
+                f"Error: Cannot curve to target {stat_name} {target_value:.2f} "
+                f"without decreasing scores."
+            )
+            p.print_red(
+                f"Current mean: {current_mean:.2f}, current median: {current_median:.2f}"
+            )
+            sys.exit(1)
+
+        if target_value > max_points:
+            p.print_red(
+                f"Error: Target {stat_name} {target_value:.2f} exceeds "
+                f"assignment max of {max_points:.2f}."
+            )
+            sys.exit(1)
+
+        exponent = self._find_exponent(
+            score_values, max_points, target_value, stat_fn, boost
+        )
+        if exponent is None:
+            p.print_red(
+                f"Error: Could not find a curve that achieves target "
+                f"{stat_name} {target_value:.2f} without decreasing scores."
+            )
+            sys.exit(1)
+
+        curved_scores = {
+            uid: self._apply_curve(score, max_points, exponent, boost)
+            for uid, score in scores.items()
+        }
+        curved_values = sorted(curved_scores.values())
+
+        self._print_stats("Original Scores", score_values, max_points)
+        self._print_stats("Curved Scores", curved_values, max_points)
+        p.print_green(f"  Exponent: {exponent:.4f}")
+        if boost > 0:
+            p.print_green(f"  Boost:    {boost:.4f}")
+
+        print()
+        self._print_histogram("Original Distribution", score_values, max_points)
+        print()
+        self._print_histogram("Curved Distribution", curved_values, max_points)
+
+        if parsed.preview:
+            return
+
+        print()
+        grade_data = {
+            uid: get_grade_dict(round(score, 2))
+            for uid, score in curved_scores.items()
+        }
+        canvas.upload_raw_grades(parsed.target_canvas_id, grade_data)
+        p.print_green(f"\nUploaded {len(grade_data)} curved scores.")
+
+    @staticmethod
+    def _apply_curve(
+        score: float, max_points: float, exponent: float, boost: float = 0
+    ) -> float:
+        if max_points == 0:
+            return score
+        curved = max_points * (score / max_points) ** exponent
+        return curved + boost * (max_points - curved)
+
+    @staticmethod
+    def _find_exponent(
+        values: list[float],
+        max_points: float,
+        target: float,
+        stat_fn,
+        boost: float = 0,
+    ) -> float | None:
+        def curved_stat(exp):
+            curved = [
+                (c := max_points * (v / max_points) ** exp) + boost * (max_points - c)
+                for v in values
+            ]
+            return stat_fn(curved)
+
+        lo, hi = 0.01, 1.0
+        # At exponent=1.0 scores are mostly unchanged; at exponent->0 all scores->max_points.
+        stat_lo = curved_stat(lo)
+        stat_hi = curved_stat(hi)
+
+        if not (min(stat_lo, stat_hi) <= target <= max(stat_lo, stat_hi)):
+            return None
+
+        for _ in range(100):
+            mid = (lo + hi) / 2
+            stat_mid = curved_stat(mid)
+            if abs(stat_mid - target) < 0.001:
+                return mid
+            if stat_mid > target:
+                lo = mid
+            else:
+                hi = mid
+
+        return (lo + hi) / 2
+
+    @staticmethod
+    def _print_stats(title: str, values: list[float], max_points: float):
+        print(f"\n  {title}")
+        print(f"    Count:    {len(values)}")
+        print(f"    Mean:     {statistics.mean(values):.2f}")
+        print(f"    Median:   {statistics.median(values):.2f}")
+        print(f"    Std Dev:  {statistics.stdev(values):.2f}")
+        print(f"    Min:      {min(values):.2f}")
+        print(f"    Max:      {max(values):.2f}  (out of {max_points:.2f})")
+
+    @staticmethod
+    def _print_histogram(title: str, values: list[float], max_points: float):
+        num_bins = 10
+        bin_size = max_points / num_bins
+        bins = []
+        for i in range(num_bins):
+            bins.append((i * bin_size, (i + 1) * bin_size))
+
+        if not bins:
+            return
+
+        counts = []
+        for low, high in bins:
+            count = sum(1 for v in values if low <= v < high)
+            counts.append(count)
+        # Include scores exactly equal to max_points in the last bin
+        counts[-1] += sum(1 for v in values if v == bins[-1][1])
+
+        max_count = max(counts) if counts else 1
+        bar_width = 40
+
+        print(f"  {title}")
+        for (low, high), count in zip(bins, counts):
+            bar_len = int(count / max_count * bar_width) if max_count > 0 else 0
+            bar = "#" * bar_len
+            label = f"    {low:6.1f} - {high:6.1f}"
+            print(f"{label} | {bar} ({count})")
+
+
 def get_enrollment_dict(enrollment: Any):
     """
     Converts an enrollment object to a dictionary.
