@@ -1,5 +1,7 @@
 """borowski_common/canvas_modules.py: canvas modules"""
 
+from __future__ import annotations
+
 import json
 import statistics
 import sys
@@ -791,7 +793,7 @@ class CurveScoresModule(CommandModule):
         print(f"  {title}")
         for (low, high), count in zip(bins, counts):
             bar_len = int(count / max_count * bar_width) if max_count > 0 else 0
-            bar = "#" * bar_len
+            bar = "#" * bar_len # pylint: disable=disallowed-name
             label = f"    {low:6.1f} - {high:6.1f}"
             print(f"{label} | {bar} ({count})")
 
