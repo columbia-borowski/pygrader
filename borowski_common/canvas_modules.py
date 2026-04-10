@@ -8,7 +8,7 @@ import sys
 from argparse import ArgumentParser, Namespace
 from csv import DictReader
 from io import StringIO
-from math import ceil
+from math import ceil, exp
 from typing import Any
 
 import requests
@@ -581,8 +581,10 @@ class MissingExamModule(CommandModule):
 class CurveScoresModule(CommandModule):
     """
     A command module to curve scores from a source assignment and write them to a target assignment.
-    Uses a power curve (score/max)^p that flattens near the top, preserving ordering
-    and ensuring scores never decrease or exceed the assignment max.
+    Uses a Kumaraswamy CDF curve: 1 - (1 - (score/max)^a)^b, where 'a' is found via
+    binary search to hit the target mean/median and 'b' = exp(skew) controls the
+    distribution shape. Optional anchors linearly rescale so the min/max scores map
+    to fixed values. Errors if any score would decrease.
     """
 
     def __init__(self):
@@ -613,10 +615,11 @@ class CurveScoresModule(CommandModule):
         )
 
         parser.add_argument(
-            "--boost",
+            "--skew",
             type=float,
             default=0,
-            help="fraction (0 to 1) to pull all scores toward the max, applied after the power curve",
+            help="shift the curve shape: positive values benefit lower scores more, "
+            "negative values benefit higher scores more (default: 0)",
         )
 
         parser.add_argument(
@@ -642,20 +645,10 @@ class CurveScoresModule(CommandModule):
         canvas = Canvas()
         course = canvas.get_course()
 
-        boost = parsed.boost
+        skew = parsed.skew
         anchor_min = parsed.anchor_min
         anchor_max = parsed.anchor_max
         has_anchors = anchor_min is not None or anchor_max is not None
-
-        if has_anchors and boost > 0:
-            p.print_red(
-                "Error: --boost cannot be used with --anchor-min or --anchor-max."
-            )
-            sys.exit(1)
-
-        if not 0 <= boost < 1:
-            p.print_red("Error: --boost must be >= 0 and < 1.")
-            sys.exit(1)
 
         assignment = course.get_assignment(parsed.source_canvas_id)
         max_points = float(assignment.points_possible)
@@ -721,38 +714,48 @@ class CurveScoresModule(CommandModule):
             max_points,
             target_value,
             stat_fn,
-            boost,
+            skew,
             anchor_min,
             anchor_max,
         )
         if exponent is None:
             p.print_red(
                 f"Error: Could not find a curve that achieves target "
-                f"{stat_name} {target_value:.2f} without decreasing scores."
+                f"{stat_name} {target_value:.2f}."
             )
             sys.exit(1)
 
+        b = exp(skew)
         if has_anchors:
-            curved_range = (
-                max_points * (score_values[0] / max_points) ** exponent,
-                max_points * (score_values[-1] / max_points) ** exponent,
+            curved_range = self._raw_curve_range(
+                score_values, max_points, exponent, b
             )
         else:
             curved_range = None
 
         curved_scores = {
             uid: self._apply_curve(
-                score, max_points, exponent, boost, anchor_min, anchor_max, curved_range
+                score, max_points, exponent, b, anchor_min, anchor_max, curved_range
             )
             for uid, score in scores.items()
         }
+
+        for uid, curved_score in curved_scores.items():
+            if curved_score < scores[uid] - 1e-9:
+                p.print_red(
+                    f"Error: Curving would decrease a score from "
+                    f"{scores[uid]:.2f} to {curved_score:.2f}. "
+                    f"Adjust --skew or anchor values."
+                )
+                sys.exit(1)
+
         curved_values = sorted(curved_scores.values())
 
         self._print_stats("Original Scores", score_values, max_points)
         self._print_stats("Curved Scores", curved_values, max_points)
         p.print_green(f"  Exponent: {exponent:.4f}")
-        if boost > 0:
-            p.print_green(f"  Boost:    {boost:.4f}")
+        if skew != 0:
+            p.print_green(f"  Skew:     {skew:.4f}")
         if anchor_min is not None:
             p.print_green(f"  Anchor Min: {anchor_min:.2f}")
         if anchor_max is not None:
@@ -779,14 +782,15 @@ class CurveScoresModule(CommandModule):
         score: float,
         max_points: float,
         exponent: float,
-        boost: float = 0,
+        b: float = 1,
         anchor_min: float = None,
         anchor_max: float = None,
         curved_range: tuple[float, float] = None,
     ) -> float:
         if max_points == 0:
             return score
-        curved = max_points * (score / max_points) ** exponent
+        x = score / max_points
+        curved = max_points * (1 - (1 - x**exponent) ** b)
         if anchor_min is not None or anchor_max is not None:
             src_min, src_max = curved_range
             dst_min = anchor_min if anchor_min is not None else src_min
@@ -794,11 +798,24 @@ class CurveScoresModule(CommandModule):
             if src_max == src_min:
                 return (dst_min + dst_max) / 2
             curved = (
-                dst_min + (curved - src_min) / (src_max - src_min) * (dst_max - dst_min)
+                dst_min
+                + (curved - src_min) / (src_max - src_min) * (dst_max - dst_min)
             )
-        else:
-            curved = curved + boost * (max_points - curved)
         return curved
+
+    @staticmethod
+    def _raw_curve_range(
+        score_values: list[float],
+        max_points: float,
+        exponent: float,
+        b: float,
+    ) -> tuple[float, float]:
+        x_min = score_values[0] / max_points
+        x_max = score_values[-1] / max_points
+        return (
+            max_points * (1 - (1 - x_min**exponent) ** b),
+            max_points * (1 - (1 - x_max**exponent) ** b),
+        )
 
     @staticmethod
     def _find_exponent(
@@ -806,14 +823,18 @@ class CurveScoresModule(CommandModule):
         max_points: float,
         target: float,
         stat_fn,
-        boost: float = 0,
+        skew: float = 0,
         anchor_min: float = None,
         anchor_max: float = None,
     ) -> float | None:
         has_anchors = anchor_min is not None or anchor_max is not None
+        b = exp(skew)
 
-        def curved_stat(exp):
-            raw = [max_points * (v / max_points) ** exp for v in values]
+        def curved_stat(a):
+            raw = [
+                max_points * (1 - (1 - (v / max_points) ** a) ** b)
+                for v in values
+            ]
             if has_anchors:
                 src_min, src_max = min(raw), max(raw)
                 dst_min = anchor_min if anchor_min is not None else src_min
@@ -826,10 +847,10 @@ class CurveScoresModule(CommandModule):
                     for c in raw
                 ]
             else:
-                curved = [c + boost * (max_points - c) for c in raw]
+                curved = raw
             return stat_fn(curved)
 
-        lo, hi = 0.01, 1.0
+        lo, hi = 0.01, 10.0
         # At exponent=1.0 scores are mostly unchanged; at exponent->0 all scores->max_points.
         stat_lo = curved_stat(lo)
         stat_hi = curved_stat(hi)
