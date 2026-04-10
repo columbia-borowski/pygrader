@@ -620,6 +620,19 @@ class CurveScoresModule(CommandModule):
         )
 
         parser.add_argument(
+            "--anchor-min",
+            type=float,
+            default=None,
+            help="fixed score to map the lowest original score to",
+        )
+        parser.add_argument(
+            "--anchor-max",
+            type=float,
+            default=None,
+            help="fixed score to map the highest original score to",
+        )
+
+        parser.add_argument(
             "--preview",
             action="store_true",
             help="preview curved grade distribution and statistics without uploading",
@@ -630,6 +643,16 @@ class CurveScoresModule(CommandModule):
         course = canvas.get_course()
 
         boost = parsed.boost
+        anchor_min = parsed.anchor_min
+        anchor_max = parsed.anchor_max
+        has_anchors = anchor_min is not None or anchor_max is not None
+
+        if has_anchors and boost > 0:
+            p.print_red(
+                "Error: --boost cannot be used with --anchor-min or --anchor-max."
+            )
+            sys.exit(1)
+
         if not 0 <= boost < 1:
             p.print_red("Error: --boost must be >= 0 and < 1.")
             sys.exit(1)
@@ -649,6 +672,22 @@ class CurveScoresModule(CommandModule):
         current_mean = statistics.mean(score_values)
         current_median = statistics.median(score_values)
 
+        if anchor_min is not None and anchor_min < 0:
+            p.print_red("Error: --anchor-min must be >= 0.")
+            sys.exit(1)
+        if anchor_max is not None and anchor_max > max_points:
+            p.print_red(
+                f"Error: --anchor-max must be <= assignment max ({max_points:.2f})."
+            )
+            sys.exit(1)
+        if (
+            anchor_min is not None
+            and anchor_max is not None
+            and anchor_min > anchor_max
+        ):
+            p.print_red("Error: --anchor-min must be <= --anchor-max.")
+            sys.exit(1)
+
         if parsed.target_mean is not None:
             stat_name = "mean"
             stat_fn = statistics.mean
@@ -660,7 +699,7 @@ class CurveScoresModule(CommandModule):
             target_value = parsed.target_median
             current_value = current_median
 
-        if target_value < current_value:
+        if not has_anchors and target_value < current_value:
             p.print_red(
                 f"Error: Cannot curve to target {stat_name} {target_value:.2f} "
                 f"without decreasing scores."
@@ -678,7 +717,13 @@ class CurveScoresModule(CommandModule):
             sys.exit(1)
 
         exponent = self._find_exponent(
-            score_values, max_points, target_value, stat_fn, boost
+            score_values,
+            max_points,
+            target_value,
+            stat_fn,
+            boost,
+            anchor_min,
+            anchor_max,
         )
         if exponent is None:
             p.print_red(
@@ -687,8 +732,18 @@ class CurveScoresModule(CommandModule):
             )
             sys.exit(1)
 
+        if has_anchors:
+            curved_range = (
+                max_points * (score_values[0] / max_points) ** exponent,
+                max_points * (score_values[-1] / max_points) ** exponent,
+            )
+        else:
+            curved_range = None
+
         curved_scores = {
-            uid: self._apply_curve(score, max_points, exponent, boost)
+            uid: self._apply_curve(
+                score, max_points, exponent, boost, anchor_min, anchor_max, curved_range
+            )
             for uid, score in scores.items()
         }
         curved_values = sorted(curved_scores.values())
@@ -698,6 +753,10 @@ class CurveScoresModule(CommandModule):
         p.print_green(f"  Exponent: {exponent:.4f}")
         if boost > 0:
             p.print_green(f"  Boost:    {boost:.4f}")
+        if anchor_min is not None:
+            p.print_green(f"  Anchor Min: {anchor_min:.2f}")
+        if anchor_max is not None:
+            p.print_green(f"  Anchor Max: {anchor_max:.2f}")
 
         print()
         self._print_histogram("Original Distribution", score_values, max_points)
@@ -717,12 +776,29 @@ class CurveScoresModule(CommandModule):
 
     @staticmethod
     def _apply_curve(
-        score: float, max_points: float, exponent: float, boost: float = 0
+        score: float,
+        max_points: float,
+        exponent: float,
+        boost: float = 0,
+        anchor_min: float = None,
+        anchor_max: float = None,
+        curved_range: tuple[float, float] = None,
     ) -> float:
         if max_points == 0:
             return score
         curved = max_points * (score / max_points) ** exponent
-        return curved + boost * (max_points - curved)
+        if anchor_min is not None or anchor_max is not None:
+            src_min, src_max = curved_range
+            dst_min = anchor_min if anchor_min is not None else src_min
+            dst_max = anchor_max if anchor_max is not None else src_max
+            if src_max == src_min:
+                return (dst_min + dst_max) / 2
+            curved = (
+                dst_min + (curved - src_min) / (src_max - src_min) * (dst_max - dst_min)
+            )
+        else:
+            curved = curved + boost * (max_points - curved)
+        return curved
 
     @staticmethod
     def _find_exponent(
@@ -731,12 +807,26 @@ class CurveScoresModule(CommandModule):
         target: float,
         stat_fn,
         boost: float = 0,
+        anchor_min: float = None,
+        anchor_max: float = None,
     ) -> float | None:
+        has_anchors = anchor_min is not None or anchor_max is not None
+
         def curved_stat(exp):
-            curved = [
-                (c := max_points * (v / max_points) ** exp) + boost * (max_points - c)
-                for v in values
-            ]
+            raw = [max_points * (v / max_points) ** exp for v in values]
+            if has_anchors:
+                src_min, src_max = min(raw), max(raw)
+                dst_min = anchor_min if anchor_min is not None else src_min
+                dst_max = anchor_max if anchor_max is not None else src_max
+                if src_max == src_min:
+                    return (dst_min + dst_max) / 2
+                curved = [
+                    dst_min
+                    + (c - src_min) / (src_max - src_min) * (dst_max - dst_min)
+                    for c in raw
+                ]
+            else:
+                curved = [c + boost * (max_points - c) for c in raw]
             return stat_fn(curved)
 
         lo, hi = 0.01, 1.0
